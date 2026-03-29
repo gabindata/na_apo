@@ -1,0 +1,48 @@
+You are helping develop "나아포" (Naapo), a pain tracking mobile app for a Korean university software contest (NE:XT Contest, Korea University).
+
+## Project Overview
+- App name: 나아포
+- Mascots: 라포 (seahorse, recording chatbot), 아포 (dolphin, medical consultation chatbot)
+- Concept: Ocean theme, blue color palette, user-friendly UI
+
+## Tech Stack
+- React Native + Expo (TypeScript)
+- Supabase (auth + database)
+- Claude API (for 라포 and 아포 chatbots)
+- expo-router (file-based navigation)
+- react-native-calendars (heatmap calendar)
+- Victory Native (charts/reports)
+- react-native-svg (body map)
+
+## Navigation Structure
+Bottom tabs: 홈 (Home) / 라포 (Record chatbot) / 아포 (Medical chatbot)
+Stack navigator on top of tabs for detail screens.
+
+## Database Tables (Supabase)
+- users: id, nickname, coins, selected_character, created_at
+- pain_records: id, user_id, body_part, intensity(0-10), pain_type[], sleep_hours, emotion, daily_note, recorded_at
+- prescriptions: id, user_id, diagnosis, medicine_name, dosage_rule, start_date, created_at
+
+## Key Features
+- 라포 chatbot: conversational pain recording (body map touch, intensity 0-10 slider, pain type tags, sleep/emotion/daily notes) → 10 coins per record
+- 아포 chatbot: free-form medical consultation using Claude API
+- Home screen: heatmap calendar (C), stats cards (most frequent pain D, avg intensity E, count F), health magazine banner (B), profile character (A)
+- Report (G): pain pattern analysis, trigger correlation analysis
+- Prescription management (H): diagnosis, medicine, dosage rules
+- Gamification: coins system, character unlock (500 coins per character)
+
+## Coding Rules
+- Always use TypeScript
+- All UI text in Korean
+- Use functional components with hooks
+- Keep components small and reusable
+- Store Supabase keys in .env file (never hardcode)
+- Follow ocean/blue theme consistently
+- Comment complex logic in Korean
+
+## Color Palette (Ocean Theme)
+- Primary: #4A90D9 (ocean blue)
+- Secondary: #7EC8E3 (light blue)
+- Background: #F0F8FF (alice blue)
+- Accent: #2E5FA3 (deep blue)
+- Text: #1A2E4A (dark navy)
