@@ -22,4 +22,16 @@ export const Colors = {
   // 탭바
   tabActive: '#4A90D9',
   tabInactive: '#A0B4C8',
+
+  /** 홈·장식용 바다 톤 (그라데이션 대신 단색·투명도 레이어에 사용) */
+  ocean: {
+    heroWash: 'rgba(74, 144, 217, 0.12)',
+    heroWashDeep: 'rgba(46, 95, 163, 0.08)',
+    bubble: 'rgba(255, 255, 255, 0.65)',
+    bubbleSoft: 'rgba(126, 200, 227, 0.35)',
+    tideBorder: 'rgba(74, 144, 217, 0.28)',
+    cardEdge: 'rgba(74, 144, 217, 0.38)',
+    bannerDepth: 'rgba(126, 200, 227, 0.45)',
+    bannerShine: 'rgba(255, 255, 255, 0.5)',
+  },
 };

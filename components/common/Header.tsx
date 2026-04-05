@@ -8,12 +8,13 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors } from '../../constants/colors';
 
 const COLORS = {
-  primary: '#4A90D9',
-  background: '#F0F8FF',
-  text: '#1A2E4A',
-  border: 'rgba(74, 144, 217, 0.14)',
+  primary: Colors.primary,
+  background: Colors.background,
+  text: Colors.text,
+  border: Colors.ocean.tideBorder,
   pressedOverlay: 'rgba(74, 144, 217, 0.08)',
 } as const;
 
