@@ -20,7 +20,15 @@ export async function sendMessage(
   });
 
   if (error) {
-    console.error('[Claude] Edge Function 오류:', error);
+    // 실제 응답 바디 추출 — 어떤 에러인지 정확히 파악
+    let errorBody: unknown = '(파싱 실패)';
+    try {
+      if ('context' in error && error.context instanceof Response) {
+        errorBody = await (error.context as Response).json();
+      }
+    } catch {}
+    console.error('[Claude] Edge Function 오류:', error.message);
+    console.error('[Claude] 실제 응답 바디:', JSON.stringify(errorBody));
     throw new Error(error.message ?? '챗봇 연결에 실패했어요.');
   }
 

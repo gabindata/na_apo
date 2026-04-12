@@ -92,21 +92,28 @@ Deno.serve(async (req) => {
       system: systemPrompt,
       messages,
     });
-
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('예상치 못한 Claude 응답 타입');
+    
+    const reply = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n');
+    
+    if (!reply.trim()) {
+      throw new Error('Claude 텍스트 응답이 비어 있습니다.');
     }
-
+    
     return new Response(
-      JSON.stringify({ reply: content.text }),
+      JSON.stringify({ reply }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (err) {
-    console.error('[chat] 오류:', err);
+    console.error('[chat] 실제 오류:', err);
+  
     return new Response(
-      JSON.stringify({ error: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }),
+      JSON.stringify({
+        error: err instanceof Error ? err.message : String(err),
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

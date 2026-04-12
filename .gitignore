@@ -30,8 +30,13 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# Supabase CLI local cache
+# Supabase CLI local cache & 로컬 전용 (supabase/.gitignore 파일은 커밋하지 않음)
 supabase/.temp/
+supabase/.gitignore
+supabase/.branches/
+supabase/.env.keys
+supabase/.env.local
+supabase/.env.*.local
 
 # local env files
 .env*.local
