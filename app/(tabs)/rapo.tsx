@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../../components/common/Header';
+import { ChatBubble } from '../../components/rapo/ChatBubble';
+import { IntensitySlider } from '../../components/rapo/IntensitySlider';
+import { PainTypeTag, type PainTypeOption } from '../../components/rapo/PainTypeTag';
 import { Colors } from '../../constants/colors';
 import { sendMessage, type Message as ApiMessage } from '../../lib/claude';
 import { supabase } from '../../lib/supabase';
@@ -57,6 +60,9 @@ export default function RapoScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>(WELCOME_MESSAGES);
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  const [intensity, setIntensity] = useState(0);
+  const [painTypes, setPainTypes] = useState<PainTypeOption[]>([]);
 
   // ── API 히스토리: 웰컴 메시지 제외, Claude에 전송되는 실제 대화만
   //    useRef → 리렌더 없이 최신값 유지, 클로저 stale 문제 없음
@@ -162,41 +168,36 @@ export default function RapoScreen() {
     [insets.bottom],
   );
 
+  const onSendPainData = useCallback(() => {
+    const parts: string[] = [];
+    if (intensity > 0) parts.push(`통증 강도: ${intensity}/10`);
+    if (painTypes.length > 0) parts.push(`통증 유형: ${painTypes.join(', ')}`);
+    if (parts.length === 0) return;
+
+    setDraft((prev) => {
+      const trimmed = prev.trim();
+      const painText = parts.join('\n');
+      return trimmed.length > 0 ? `${trimmed}\n${painText}` : painText;
+    });
+    setShowTools(false);
+  }, [intensity, painTypes]);
+
   const renderItem = useCallback(
-    ({ item }: { item: ChatMessage }) => (
-      <View
-        style={[
-          styles.bubbleRow,
-          item.role === 'user' ? styles.bubbleRowUser : styles.bubbleRowAssistant,
-        ]}
-        accessibilityRole="text"
-        accessibilityLabel={
-          item.role === 'user' ? `내 메시지: ${item.text}` : `라포: ${item.text}`
-        }
-      >
-        {item.role === 'assistant' ? (
-          <View style={styles.avatarWrap} accessibilityElementsHidden>
-            <Text style={styles.avatarEmoji}>🌊</Text>
-          </View>
-        ) : null}
-        <View
-          style={[
-            styles.bubble,
-            item.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant,
-          ]}
+    ({ item, index }: { item: ChatMessage; index: number }) => {
+      const isRapo = item.role === 'assistant';
+      const prevItem = index > 0 ? messages[index - 1] : null;
+      const hideAvatar = isRapo && prevItem?.role === 'assistant';
+
+      return (
+        <ChatBubble
+          role={isRapo ? 'rapo' : 'user'}
+          hideRapoAvatar={hideAvatar}
         >
-          <Text
-            style={[
-              styles.bubbleText,
-              item.role === 'user' ? styles.bubbleTextUser : styles.bubbleTextAssistant,
-            ]}
-          >
-            {item.text}
-          </Text>
-        </View>
-      </View>
-    ),
-    [],
+          {item.text}
+        </ChatBubble>
+      );
+    },
+    [messages],
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
@@ -249,17 +250,47 @@ export default function RapoScreen() {
           keyboardDismissMode="on-drag"
           ListFooterComponent={
             isLoading ? (
-              <View style={[styles.bubbleRow, styles.bubbleRowAssistant]}>
-                <View style={styles.avatarWrap} accessibilityElementsHidden>
-                  <Text style={styles.avatarEmoji}>🌊</Text>
-                </View>
-                <View style={[styles.bubble, styles.bubbleAssistant, styles.typingBubble]}>
-                  <ActivityIndicator size="small" color={Colors.accent} />
-                </View>
-              </View>
+              <ChatBubble role="rapo">
+                <ActivityIndicator size="small" color={Colors.accent} />
+              </ChatBubble>
             ) : null
           }
         />
+
+        {showTools && (
+          <View style={styles.toolsPanel}>
+            <IntensitySlider
+              value={intensity}
+              onValueChange={setIntensity}
+              style={styles.toolItem}
+            />
+            <PainTypeTag
+              value={painTypes}
+              onChange={setPainTypes}
+              style={styles.toolItem}
+            />
+            <Pressable
+              onPress={onSendPainData}
+              disabled={intensity === 0 && painTypes.length === 0}
+              style={({ pressed }) => [
+                styles.painSendBtn,
+                intensity === 0 && painTypes.length === 0 && styles.sendBtnDisabled,
+                pressed && styles.sendBtnPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="통증 정보 입력창에 넣기"
+            >
+              <Text
+                style={[
+                  styles.painSendBtnText,
+                  intensity === 0 && painTypes.length === 0 && styles.sendBtnTextDisabled,
+                ]}
+              >
+                입력창에 넣기
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         <View
           style={[
@@ -271,6 +302,20 @@ export default function RapoScreen() {
           ]}
         >
           <View style={styles.composerInner}>
+            <Pressable
+              onPress={() => setShowTools((v) => !v)}
+              style={({ pressed }) => [
+                styles.toolToggle,
+                showTools && styles.toolToggleActive,
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={showTools ? '통증 도구 닫기' : '통증 도구 열기'}
+            >
+              <Text style={[styles.toolToggleText, showTools && styles.toolToggleTextActive]}>
+                {showTools ? '✕' : '+'}
+              </Text>
+            </Pressable>
             <TextInput
               style={styles.input}
               value={draft}
@@ -363,61 +408,50 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.accent,
   },
-  bubbleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 12,
-    maxWidth: '100%',
+  toolsPanel: {
+    backgroundColor: Colors.white,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.ocean.tideBorder,
+    paddingHorizontal: H_PAD,
+    paddingVertical: 16,
   },
-  bubbleRowUser: {
-    justifyContent: 'flex-end',
-    alignSelf: 'flex-end',
+  toolItem: {
+    marginBottom: 16,
   },
-  bubbleRowAssistant: {
-    justifyContent: 'flex-start',
-    alignSelf: 'flex-start',
+  painSendBtn: {
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: Colors.accent,
   },
-  avatarWrap: {
+  painSendBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  toolToggle: {
     width: 36,
     height: 36,
-    borderRadius: 12,
-    backgroundColor: Colors.ocean.heroWashDeep,
-    borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  avatarEmoji: {
-    fontSize: 18,
-  },
-  bubble: {
-    maxWidth: '82%',
     borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  bubbleUser: {
-    backgroundColor: Colors.primary,
-    borderBottomRightRadius: 6,
-  },
-  bubbleAssistant: {
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.ocean.cardEdge,
-    borderBottomLeftRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  bubbleText: {
-    fontSize: 15,
+  toolToggleActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  toolToggleText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: Colors.accent,
     lineHeight: 22,
   },
-  bubbleTextUser: {
+  toolToggleTextActive: {
     color: Colors.white,
-    fontWeight: '500',
-  },
-  bubbleTextAssistant: {
-    color: Colors.text,
-    fontWeight: '500',
   },
   composerOuter: {
     backgroundColor: Colors.background,
@@ -466,12 +500,5 @@ const styles = StyleSheet.create({
   },
   sendBtnTextDisabled: {
     color: Colors.textLight,
-  },
-  typingBubble: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    minWidth: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
