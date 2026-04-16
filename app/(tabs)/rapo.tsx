@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
+  LayoutChangeEvent,
   Platform,
   Pressable,
   StyleSheet,
@@ -14,14 +16,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../../components/common/Header';
 import { ChatBubble } from '../../components/rapo/ChatBubble';
 import { IntensitySlider } from '../../components/rapo/IntensitySlider';
-import { PainTypeTag, type PainTypeOption } from '../../components/rapo/PainTypeTag';
 import { Colors } from '../../constants/colors';
+import { RAPO_UI_INTENSITY_MARKER } from '../../constants/prompts';
 import { sendMessage, type Message as ApiMessage } from '../../lib/claude';
 import { supabase } from '../../lib/supabase';
 
 const H_PAD = 20;
 const COMPOSER_MIN_HEIGHT = 44;
 const INPUT_MAX_LINES = 5;
+/** FlatList 대화 영역 상단 패딩과 동일 — 키보드와 입력 영역 사이에도 같은 간격 */
+const CHAT_EDGE_VERTICAL_PAD = 12;
 
 type ChatRole = 'user' | 'assistant';
 
@@ -33,6 +37,78 @@ type ChatMessage = {
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function stripRapoUiMarkers(raw: string): string {
+  return raw.split(RAPO_UI_INTENSITY_MARKER).join('').trim();
+}
+
+/**
+ * 마커(<<NAAPO_UI:INTENSITY>>)가 있으면 항상 슬라이더.
+ * 마커가 없을 때만 휴리스틱 사용 — 0~10 척도 표현이 다양해 이전보다 범위를 넓히되,
+ * '통증'만 있고 '강도/점수/0~10' 맥락이 없는 문장(예: 부위·일상 질문)은 제외한다.
+ */
+function parseRapoAssistantReply(raw: string): {
+  visible: string;
+  showIntensityUi: boolean;
+  forApi: string;
+} {
+  const hasMarker = raw.includes(RAPO_UI_INTENSITY_MARKER);
+  const forApi = stripRapoUiMarkers(raw);
+  const normalized = forApi.replace(/\s+/g, ' ').toLowerCase();
+  const isQuestionLike =
+    /[?？]\s*$/.test(forApi.trim()) ||
+    /(인가요|인가요\?|인가요\.$|인가요\s*$)/.test(forApi) ||
+    /(나요|나요\?|나요\.$|나요\s*$)/.test(forApi) ||
+    /(까요|까요\?|까요\.$|까요\s*$)/.test(forApi) ||
+    /(주세요|주세요\?|주세요\.$|주세요\s*$)/.test(forApi);
+
+  const has010Scale =
+    /0\s*~\s*10/.test(normalized) ||
+    /0\s*-\s*10/.test(normalized) ||
+    /0\s*에서\s*10/.test(forApi) ||
+    /0\s*부터\s*10/.test(forApi) ||
+    /1\s*에서\s*10/.test(forApi) ||
+    /1\s*~\s*10/.test(normalized) ||
+    /1\s*-\s*10/.test(normalized) ||
+    /0\s*점\s*에서\s*10\s*점/.test(normalized) ||
+    /10\s*점\s*만점/.test(forApi) ||
+    /만점.*?10/.test(forApi);
+
+  const intensityContext =
+    /통증\s*강도/.test(forApi) ||
+    (/통증/.test(forApi) && /강도/.test(forApi)) ||
+    /강도는\s*몇/.test(forApi) ||
+    /강도가\s*어떠/.test(forApi) ||
+    /강도를\s*(알려|말씀|점수|표현)/.test(forApi);
+
+  /** 0~10 문구 없이도 흔한 강도 질문 표현 */
+  const asksIntensityPoints =
+    intensityContext &&
+    (/몇\s*점/.test(forApi) || /점수(로|를)/.test(forApi) || /수치(로|를)/.test(forApi));
+
+  /** 감사·확인 등으로 오탐 방지 */
+  const looksLikeAckOnly =
+    /^(네|좋아요|알겠|고마|감사|그럼|다음|좋습니다|오케이)/.test(forApi.trim()) &&
+    !isQuestionLike;
+
+  /** '강도' 단어 없이도 0~10 + 통증 어휘로 묻는 경우 (모델 표현 차이) */
+  const scaleWithPainWording =
+    has010Scale &&
+    /통증|아프|아픔|불편/.test(forApi) &&
+    /(심한|얼마나|어느\s*정도|정도를|정도가|느껴지|느끼)/.test(forApi);
+
+  const heuristicMatch =
+    isQuestionLike &&
+    !looksLikeAckOnly &&
+    ((has010Scale && intensityContext) ||
+      (has010Scale && /통증/.test(forApi) && /강도/.test(forApi)) ||
+      asksIntensityPoints ||
+      scaleWithPainWording);
+
+  const showIntensityUi = hasMarker || heuristicMatch;
+  const visible = forApi.length > 0 ? forApi : '통증 강도를 알려주세요.';
+  return { visible, showIntensityUi, forApi };
 }
 
 const WELCOME_MESSAGES: ChatMessage[] = [
@@ -49,28 +125,24 @@ const QUICK_PROMPTS = [
   '어제 일기 이어서',
 ] as const;
 
-// 유저에게 보여줄 안전한 에러 메시지 (내부 에러는 console.error로만)
 const USER_FRIENDLY_ERROR = '지금 응답이 원활하지 않아요. 잠시 후 다시 시도해주세요.';
 
 export default function RapoScreen() {
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
-  // ── UI 상태: 웰컴 메시지 포함, 화면에 표시되는 버블 전체
   const [messages, setMessages] = useState<ChatMessage[]>(WELCOME_MESSAGES);
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showTools, setShowTools] = useState(false);
-  const [intensity, setIntensity] = useState(0);
-  const [painTypes, setPainTypes] = useState<PainTypeOption[]>([]);
+  const [awaitingIntensityInComposer, setAwaitingIntensityInComposer] = useState(false);
+  const [pendingIntensity, setPendingIntensity] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [composerHeight, setComposerHeight] = useState(0);
 
-  // ── API 히스토리: 웰컴 메시지 제외, Claude에 전송되는 실제 대화만
-  //    useRef → 리렌더 없이 최신값 유지, 클로저 stale 문제 없음
   const apiHistory = useRef<ApiMessage[]>([]);
-
-  // ── 레이스 컨디션 방지: 각 요청마다 고유 ID를 부여하고,
-  //    응답 도착 시점에 ID가 일치할 때만 state 반영
   const requestIdRef = useRef(0);
+  const intensitySubmittingRef = useRef(false);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -85,6 +157,25 @@ export default function RapoScreen() {
     checkSession();
   }, []);
 
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setIsKeyboardVisible(true);
+      setKeyboardHeight(e.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const canSend = draft.trim().length > 0 && !isLoading;
 
   const scrollToEnd = useCallback(() => {
@@ -97,90 +188,129 @@ export default function RapoScreen() {
     scrollToEnd();
   }, [messages.length, isLoading, scrollToEnd]);
 
+  useEffect(() => {
+    const t = setTimeout(() => scrollToEnd(), 50);
+    return () => clearTimeout(t);
+  }, [isKeyboardVisible, keyboardHeight, composerHeight, scrollToEnd]);
+
+  const onComposerLayout = useCallback((e: LayoutChangeEvent) => {
+    setComposerHeight(e.nativeEvent.layout.height);
+  }, []);
+
+  // 컴포저(입력·슬라이더) 높이만큼 리스트 하단 패딩 — 키보드가 올라와도 마지막 말풍선을 끝까지 올릴 수 있게
+  const listBottomPadding = useMemo(() => composerHeight + CHAT_EDGE_VERTICAL_PAD, [composerHeight]);
+
   const onSend = useCallback(async () => {
     const text = draft.trim();
     if (!text || isLoading) return;
 
-    // ── Fix 1: 단일 진실 공급원(single source of truth)
-    //    nextMessages를 먼저 만들어, UI 업데이트와 API 히스토리 빌드 양쪽에 동일하게 사용
     const userMsg: ChatMessage = { id: createId(), role: 'user', text };
     const nextUiMessages = [...messages, userMsg];
     setMessages(nextUiMessages);
     setDraft('');
     setIsLoading(true);
 
-    // ── Fix 4: API 히스토리는 UI 메시지(nextUiMessages)와 분리
-    //    웰컴 메시지가 포함되지 않도록 apiHistory ref에서 별도 관리
     const nextApiHistory: ApiMessage[] = [
       ...apiHistory.current,
       { role: 'user', content: text },
     ];
 
-    // ── Fix 2: 레이스 컨디션 방지
-    //    요청 직전에 ID를 올리고, 응답 시 현재 ID와 비교
     const currentRequestId = ++requestIdRef.current;
 
     try {
       const reply = await sendMessage(nextApiHistory, 'rapo');
 
-      // 이 응답이 가장 최근 요청의 것인지 확인 (리셋/재전송 등으로 무효화된 경우 무시)
       if (currentRequestId !== requestIdRef.current) return;
 
-      setMessages((prev) => [...prev, { id: createId(), role: 'assistant', text: reply }]);
+      const { visible, showIntensityUi, forApi } = parseRapoAssistantReply(reply);
 
-      // 성공 시 API 히스토리에 어시스턴트 응답도 추가
-      apiHistory.current = [...nextApiHistory, { role: 'assistant', content: reply }];
+      setMessages((prev) => [...prev, { id: createId(), role: 'assistant', text: visible }]);
+      apiHistory.current = [...nextApiHistory, { role: 'assistant', content: forApi }];
+
+      if (showIntensityUi) {
+        setAwaitingIntensityInComposer(true);
+        setPendingIntensity(0);
+      }
     } catch (err) {
       if (currentRequestId !== requestIdRef.current) return;
 
-      // ── Fix 3: 에러 분리
-      //    콘솔에는 디버깅용 전체 에러, UI에는 사용자 친화적 메시지만
       console.error('[Rapo] Claude API error:', err);
-      // 실패해도 유저 턴은 히스토리에 남김 — 다음 전송 시 문맥이 끊기지 않도록
       apiHistory.current = nextApiHistory;
       setMessages((prev) => [
         ...prev,
         { id: createId(), role: 'assistant', text: USER_FRIENDLY_ERROR },
       ]);
     } finally {
-      // isLoading은 현재 요청이 유효할 때만 해제
       if (currentRequestId === requestIdRef.current) {
         setIsLoading(false);
       }
     }
   }, [draft, isLoading, messages]);
 
+  const onSubmitIntensity = useCallback(async () => {
+    if (!awaitingIntensityInComposer || intensitySubmittingRef.current || isLoading) return;
+
+    intensitySubmittingRef.current = true;
+    const text = `통증 강도는 ${pendingIntensity}/10이에요.`;
+
+    const userMsg: ChatMessage = { id: createId(), role: 'user', text };
+    setAwaitingIntensityInComposer(false);
+
+    setMessages((prev) => [...prev, userMsg]);
+    setIsLoading(true);
+
+    const nextApiHistory: ApiMessage[] = [
+      ...apiHistory.current,
+      { role: 'user', content: text },
+    ];
+
+    const currentRequestId = ++requestIdRef.current;
+
+    try {
+      const reply = await sendMessage(nextApiHistory, 'rapo');
+
+      if (currentRequestId !== requestIdRef.current) return;
+
+      const { visible, showIntensityUi, forApi } = parseRapoAssistantReply(reply);
+
+      setMessages((prev) => [...prev, { id: createId(), role: 'assistant', text: visible }]);
+      apiHistory.current = [...nextApiHistory, { role: 'assistant', content: forApi }];
+
+      if (showIntensityUi) {
+        setAwaitingIntensityInComposer(true);
+        setPendingIntensity(0);
+      }
+    } catch (err) {
+      if (currentRequestId !== requestIdRef.current) return;
+
+      console.error('[Rapo] Claude API error (intensity):', err);
+      apiHistory.current = nextApiHistory;
+      setMessages((prev) => [
+        ...prev,
+        { id: createId(), role: 'assistant', text: USER_FRIENDLY_ERROR },
+      ]);
+    } finally {
+      intensitySubmittingRef.current = false;
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, [awaitingIntensityInComposer, isLoading, pendingIntensity]);
+
   const onReset = useCallback(() => {
-    // requestId를 올려서 진행 중인 요청의 응답이 도착해도 무시되도록 무효화
     requestIdRef.current++;
     apiHistory.current = [];
     setMessages(WELCOME_MESSAGES);
     setDraft('');
     setIsLoading(false);
+    setAwaitingIntensityInComposer(false);
+    setPendingIntensity(0);
+    intensitySubmittingRef.current = false;
   }, []);
 
   const onQuickPrompt = useCallback((label: string) => {
     setDraft((prev) => (prev.trim().length > 0 ? `${prev.trim()}\n${label}` : label));
   }, []);
-
-  const listBottomPadding = useMemo(
-    () => Math.max(insets.bottom, 12) + 8,
-    [insets.bottom],
-  );
-
-  const onSendPainData = useCallback(() => {
-    const parts: string[] = [];
-    if (intensity > 0) parts.push(`통증 강도: ${intensity}/10`);
-    if (painTypes.length > 0) parts.push(`통증 유형: ${painTypes.join(', ')}`);
-    if (parts.length === 0) return;
-
-    setDraft((prev) => {
-      const trimmed = prev.trim();
-      const painText = parts.join('\n');
-      return trimmed.length > 0 ? `${trimmed}\n${painText}` : painText;
-    });
-    setShowTools(false);
-  }, [intensity, painTypes]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: ChatMessage; index: number }) => {
@@ -202,6 +332,9 @@ export default function RapoScreen() {
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
+  // 키보드 켜진 상태에서의 하단 패딩
+  const composerBottomPad = isKeyboardVisible ? 10 : Math.max(insets.bottom, 10);
+
   return (
     <View style={styles.screenRoot}>
       <Header
@@ -216,7 +349,7 @@ export default function RapoScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        keyboardVerticalOffset={0}
       >
         <View style={styles.chipsBlock}>
           <Text style={styles.chipsLabel}>이렇게 시작해볼 수 있어요</Text>
@@ -243,11 +376,14 @@ export default function RapoScreen() {
           style={styles.flex}
           contentContainerStyle={[
             styles.listContent,
-            { paddingBottom: listBottomPadding },
+            {
+              paddingBottom: listBottomPadding,
+            },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          removeClippedSubviews={false}
           ListFooterComponent={
             isLoading ? (
               <ChatBubble role="rapo">
@@ -257,65 +393,47 @@ export default function RapoScreen() {
           }
         />
 
-        {showTools && (
-          <View style={styles.toolsPanel}>
-            <IntensitySlider
-              value={intensity}
-              onValueChange={setIntensity}
-              style={styles.toolItem}
-            />
-            <PainTypeTag
-              value={painTypes}
-              onChange={setPainTypes}
-              style={styles.toolItem}
-            />
-            <Pressable
-              onPress={onSendPainData}
-              disabled={intensity === 0 && painTypes.length === 0}
-              style={({ pressed }) => [
-                styles.painSendBtn,
-                intensity === 0 && painTypes.length === 0 && styles.sendBtnDisabled,
-                pressed && styles.sendBtnPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="통증 정보 입력창에 넣기"
-            >
-              <Text
-                style={[
-                  styles.painSendBtnText,
-                  intensity === 0 && painTypes.length === 0 && styles.sendBtnTextDisabled,
-                ]}
-              >
-                입력창에 넣기
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
         <View
           style={[
             styles.composerOuter,
             {
-              paddingBottom: Math.max(insets.bottom, 10),
+              paddingBottom: composerBottomPad,
               borderTopColor: Colors.ocean.tideBorder,
             },
           ]}
+          onLayout={onComposerLayout}
         >
+          {awaitingIntensityInComposer && (
+            <View style={styles.composerIntensity}>
+              <IntensitySlider
+                value={pendingIntensity}
+                onValueChange={setPendingIntensity}
+                disabled={isLoading}
+              />
+              <Pressable
+                onPress={onSubmitIntensity}
+                disabled={isLoading}
+                style={({ pressed }) => [
+                  styles.intensityDoneBtn,
+                  isLoading && styles.sendBtnDisabled,
+                  pressed && !isLoading && styles.sendBtnPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="통증 강도 선택 완료"
+              >
+                <Text
+                  style={[
+                    styles.intensityDoneBtnText,
+                    isLoading && styles.sendBtnTextDisabled,
+                  ]}
+                >
+                  선택 완료
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
           <View style={styles.composerInner}>
-            <Pressable
-              onPress={() => setShowTools((v) => !v)}
-              style={({ pressed }) => [
-                styles.toolToggle,
-                showTools && styles.toolToggleActive,
-                pressed && { opacity: 0.7 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={showTools ? '통증 도구 닫기' : '통증 도구 열기'}
-            >
-              <Text style={[styles.toolToggleText, showTools && styles.toolToggleTextActive]}>
-                {showTools ? '✕' : '+'}
-              </Text>
-            </Pressable>
             <TextInput
               style={styles.input}
               value={draft}
@@ -371,7 +489,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'flex-end',
     paddingHorizontal: H_PAD,
-    paddingTop: 12,
+    paddingTop: 10,
   },
   chipsBlock: {
     paddingHorizontal: H_PAD,
@@ -408,56 +526,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.accent,
   },
-  toolsPanel: {
-    backgroundColor: Colors.white,
+  composerOuter: {
+    backgroundColor: Colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.ocean.tideBorder,
     paddingHorizontal: H_PAD,
-    paddingVertical: 16,
+    /** 말풍선 row marginBottom(10)만으로 말풍선 간격과 비슷하게 유지 — paddingTop을 두면 간격이 커짐 */
+    paddingTop: 10,
   },
-  toolItem: {
-    marginBottom: 16,
+  composerIntensity: {
+    marginBottom: 10,
   },
-  painSendBtn: {
+  intensityDoneBtn: {
     alignSelf: 'center',
+    marginTop: 10,
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 16,
     backgroundColor: Colors.accent,
   },
-  painSendBtnText: {
+  intensityDoneBtnText: {
     fontSize: 14,
     fontWeight: '700',
     color: Colors.white,
-  },
-  toolToggle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.ocean.cardEdge,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toolToggleActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  toolToggleText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: Colors.accent,
-    lineHeight: 22,
-  },
-  toolToggleTextActive: {
-    color: Colors.white,
-  },
-  composerOuter: {
-    backgroundColor: Colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: H_PAD,
-    paddingTop: 10,
   },
   composerInner: {
     flexDirection: 'row',
