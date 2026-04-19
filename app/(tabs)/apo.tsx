@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -20,7 +20,7 @@ import { sendMessage, type Message as ApiMessage } from '../../lib/claude';
 const H_PAD = 20;
 const COMPOSER_MIN_HEIGHT = 44;
 const INPUT_MAX_LINES = 5;
-const CHAT_EDGE_VERTICAL_PAD = 12;
+const CHAT_EDGE_VERTICAL_PAD = 4;
 const HEADER_HEIGHT = 88;
 
 type ChatRole = 'user' | 'assistant';
@@ -44,12 +44,6 @@ const WELCOME_MESSAGES: ChatMessage[] = [
   },
 ];
 
-const QUICK_PROMPTS = [
-  '요즘 자주 두통이 와요',
-  '잠을 잘 못 자고 있어요',
-  '소화가 잘 안 돼요',
-] as const;
-
 const USER_FRIENDLY_ERROR =
   '지금 응답이 원활하지 않아요. 잠시 후 다시 시도해주세요.';
 
@@ -61,6 +55,7 @@ export default function ApoScreen() {
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [composerHeight, setComposerHeight] = useState(0);
+  const [guideExpanded, setGuideExpanded] = useState(true);
 
   // 최신 UI 메시지 참조
   const messagesRef = useRef<ChatMessage[]>([...WELCOME_MESSAGES]);
@@ -96,10 +91,8 @@ export default function ApoScreen() {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
 
-  const listBottomPadding = useMemo(
-    () => composerHeight + CHAT_EDGE_VERTICAL_PAD,
-    [composerHeight],
-  );
+  // composer는 FlatList 아래 쌓이는 구조(오버랩 없음) — paddingBottom은 미적 여백만 필요
+  const listBottomPadding = CHAT_EDGE_VERTICAL_PAD;
 
   const appendUiMessage = useCallback((message: ChatMessage) => {
     setMessages((prev) => {
@@ -174,10 +167,6 @@ export default function ApoScreen() {
     setIsLoading(false);
   }, []);
 
-  const onQuickPrompt = useCallback((label: string) => {
-    setDraft((prev) => (prev.trim().length > 0 ? `${prev.trim()}\n${label}` : label));
-  }, []);
-
   const renderItem = useCallback(
     ({ item, index }: { item: ChatMessage; index: number }) => {
       const isApo = item.role === 'assistant';
@@ -213,21 +202,24 @@ export default function ApoScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? HEADER_HEIGHT : 0}
       >
-        <View style={styles.chipsBlock}>
-          <Text style={styles.chipsLabel}>이렇게 시작해볼 수 있어요</Text>
-          <View style={styles.chipsRow}>
-            {QUICK_PROMPTS.map((label) => (
-              <Pressable
-                key={label}
-                onPress={() => onQuickPrompt(label)}
-                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`빠른 입력: ${label}`}
-              >
-                <Text style={styles.chipText}>{label}</Text>
-              </Pressable>
-            ))}
-          </View>
+        {/* 접을 수 있는 가이드라인 */}
+        <View style={styles.guideBlock}>
+          <Pressable
+            onPress={() => setGuideExpanded((v) => !v)}
+            style={styles.guideHeader}
+            accessibilityRole="button"
+            accessibilityLabel={guideExpanded ? '가이드라인 접기' : '가이드라인 펼치기'}
+          >
+            <Text style={styles.guideHeaderText}>💬 아포에게 물어보세요</Text>
+            <Text style={styles.guideToggle}>{guideExpanded ? '접기 ▲' : '펼치기 ▼'}</Text>
+          </Pressable>
+          {guideExpanded && (
+            <View style={styles.guideContent}>
+              <Text style={styles.guideItem}>건강 고민이나 증상에 대해 편하게 물어보세요.</Text>
+              <Text style={styles.guideItem}>💊 의학적 진단·처방은 제공하지 않아요.</Text>
+              <Text style={styles.guideItem}>🚨 응급 증상이라면 즉시 병원 방문을 권해요.</Text>
+            </View>
+          )}
         </View>
 
         <FlatList
@@ -321,40 +313,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: H_PAD,
     paddingTop: 10,
   },
-  chipsBlock: {
-    paddingHorizontal: H_PAD,
-    paddingTop: 10,
-    paddingBottom: 6,
+  guideBlock: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.ocean.tideBorder,
     backgroundColor: Colors.background,
   },
-  chipsLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textLight,
-    marginBottom: 10,
-  },
-  chipsRow: {
+  guideHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: H_PAD,
+    paddingVertical: 10,
   },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.ocean.cardEdge,
-  },
-  chipPressed: {
-    backgroundColor: Colors.ocean.heroWash,
-  },
-  chipText: {
+  guideHeaderText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.accent,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  guideToggle: {
+    fontSize: 11,
+    color: Colors.textLight,
+  },
+  guideContent: {
+    paddingHorizontal: H_PAD,
+    paddingBottom: 10,
+    gap: 4,
+  },
+  guideItem: {
+    fontSize: 13,
+    color: Colors.textLight,
+    lineHeight: 20,
   },
   composerOuter: {
     backgroundColor: Colors.background,

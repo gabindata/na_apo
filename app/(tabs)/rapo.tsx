@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -25,7 +25,7 @@ const H_PAD = 20;
 const COMPOSER_MIN_HEIGHT = 44;
 const INPUT_MAX_LINES = 5;
 /** FlatList 대화 영역 상단 패딩과 동일 — 키보드와 입력 영역 사이에도 같은 간격 */
-const CHAT_EDGE_VERTICAL_PAD = 12;
+const CHAT_EDGE_VERTICAL_PAD = 4;
 
 type ChatRole = 'user' | 'assistant';
 
@@ -43,11 +43,6 @@ function stripRapoUiMarkers(raw: string): string {
   return raw.split(RAPO_UI_INTENSITY_MARKER).join('').trim();
 }
 
-/**
- * 마커(<<NAAPO_UI:INTENSITY>>)가 있으면 항상 슬라이더.
- * 마커가 없을 때만 휴리스틱 사용 — 0~10 척도 표현이 다양해 이전보다 범위를 넓히되,
- * '통증'만 있고 '강도/점수/0~10' 맥락이 없는 문장(예: 부위·일상 질문)은 제외한다.
- */
 function parseRapoAssistantReply(raw: string): {
   visible: string;
   showIntensityUi: boolean;
@@ -55,60 +50,39 @@ function parseRapoAssistantReply(raw: string): {
 } {
   const hasMarker = raw.includes(RAPO_UI_INTENSITY_MARKER);
   const forApi = stripRapoUiMarkers(raw);
-  const normalized = forApi.replace(/\s+/g, ' ').toLowerCase();
-  const isQuestionLike =
-    /[?？]\s*$/.test(forApi.trim()) ||
-    /(인가요|인가요\?|인가요\.$|인가요\s*$)/.test(forApi) ||
-    /(나요|나요\?|나요\.$|나요\s*$)/.test(forApi) ||
-    /(까요|까요\?|까요\.$|까요\s*$)/.test(forApi) ||
-    /(주세요|주세요\?|주세요\.$|주세요\s*$)/.test(forApi);
-
-  const has010Scale =
-    /0\s*~\s*10/.test(normalized) ||
-    /0\s*-\s*10/.test(normalized) ||
-    /0\s*에서\s*10/.test(forApi) ||
-    /0\s*부터\s*10/.test(forApi) ||
-    /1\s*에서\s*10/.test(forApi) ||
-    /1\s*~\s*10/.test(normalized) ||
-    /1\s*-\s*10/.test(normalized) ||
-    /0\s*점\s*에서\s*10\s*점/.test(normalized) ||
-    /10\s*점\s*만점/.test(forApi) ||
-    /만점.*?10/.test(forApi);
-
-  const intensityContext =
-    /통증\s*강도/.test(forApi) ||
-    (/통증/.test(forApi) && /강도/.test(forApi)) ||
-    /강도는\s*몇/.test(forApi) ||
-    /강도가\s*어떠/.test(forApi) ||
-    /강도를\s*(알려|말씀|점수|표현)/.test(forApi);
-
-  /** 0~10 문구 없이도 흔한 강도 질문 표현 */
-  const asksIntensityPoints =
-    intensityContext &&
-    (/몇\s*점/.test(forApi) || /점수(로|를)/.test(forApi) || /수치(로|를)/.test(forApi));
-
-  /** 감사·확인 등으로 오탐 방지 */
-  const looksLikeAckOnly =
-    /^(네|좋아요|알겠|고마|감사|그럼|다음|좋습니다|오케이)/.test(forApi.trim()) &&
-    !isQuestionLike;
-
-  /** '강도' 단어 없이도 0~10 + 통증 어휘로 묻는 경우 (모델 표현 차이) */
-  const scaleWithPainWording =
-    has010Scale &&
-    /통증|아프|아픔|불편/.test(forApi) &&
-    /(심한|얼마나|어느\s*정도|정도를|정도가|느껴지|느끼)/.test(forApi);
-
-  const heuristicMatch =
-    isQuestionLike &&
-    !looksLikeAckOnly &&
-    ((has010Scale && intensityContext) ||
-      (has010Scale && /통증/.test(forApi) && /강도/.test(forApi)) ||
-      asksIntensityPoints ||
-      scaleWithPainWording);
-
-  const showIntensityUi = hasMarker || heuristicMatch;
+  const showIntensityUi = hasMarker || isIntensityQuestion(forApi);
   const visible = forApi.length > 0 ? forApi : '통증 강도를 알려주세요.';
   return { visible, showIntensityUi, forApi };
+}
+
+/**
+ * 텍스트가 강도(0~10) 질문인지 판별.
+ * 마커 없는 폴백용이자, 강도 제출 후 '진짜 다시 묻는 건지' 확인용으로도 사용.
+ */
+function isIntensityQuestion(text: string): boolean {
+  const normalized = text.replace(/\s+/g, ' ').toLowerCase();
+
+  const isQuestion =
+    /[?？]/.test(text) ||
+    /(인가요|나요|까요|주세요)\s*$/.test(text.trim());
+
+  const has010Scale =
+    /0\s*[~\-]\s*10/.test(normalized) ||
+    /0\s*(에서|부터)\s*10/.test(text) ||
+    /1\s*[~\-]\s*10/.test(normalized) ||
+    /10\s*점\s*만점/.test(text) ||
+    /만점.*?10/.test(text);
+
+  const hasIntensityContext =
+    /통증\s*강도/.test(text) ||
+    /강도는?\s*몇/.test(text) ||
+    /강도(가|를|을)\s*(알려|말씀|점수|표현|선택)/.test(text) ||
+    (has010Scale && /통증|아프|불편/.test(text));
+
+  const looksLikeAckOnly =
+    /^(네|좋아요|알겠|고마|감사|그럼|다음|좋습니다|오케이)/.test(text.trim()) && !isQuestion;
+
+  return isQuestion && !looksLikeAckOnly && (has010Scale || hasIntensityContext);
 }
 
 const WELCOME_MESSAGES: ChatMessage[] = [
@@ -118,12 +92,6 @@ const WELCOME_MESSAGES: ChatMessage[] = [
     text: '안녕, 나는 라포예요. 🌊\n오늘 있었던 일이나 몸 상태를 편하게 적어줘도 돼요. 나중에 아포와 연결할 기록 챗봇이에요.',
   },
 ];
-
-const QUICK_PROMPTS = [
-  '오늘 통증 짧게 적어볼게',
-  '기분 정리하고 싶어',
-  '어제 일기 이어서',
-] as const;
 
 const USER_FRIENDLY_ERROR = '지금 응답이 원활하지 않아요. 잠시 후 다시 시도해주세요.';
 
@@ -198,7 +166,8 @@ export default function RapoScreen() {
   }, []);
 
   // 컴포저(입력·슬라이더) 높이만큼 리스트 하단 패딩 — 키보드가 올라와도 마지막 말풍선을 끝까지 올릴 수 있게
-  const listBottomPadding = useMemo(() => composerHeight + CHAT_EDGE_VERTICAL_PAD, [composerHeight]);
+  // composer는 FlatList 아래 쌓이는 구조(오버랩 없음) — paddingBottom은 미적 여백만 필요
+  const listBottomPadding = CHAT_EDGE_VERTICAL_PAD;
 
   const onSend = useCallback(async () => {
     const text = draft.trim();
@@ -271,12 +240,15 @@ export default function RapoScreen() {
 
       if (currentRequestId !== requestIdRef.current) return;
 
-      const { visible, showIntensityUi, forApi } = parseRapoAssistantReply(reply);
+      const { visible, forApi } = parseRapoAssistantReply(reply);
 
       setMessages((prev) => [...prev, { id: createId(), role: 'assistant', text: visible }]);
       apiHistory.current = [...nextApiHistory, { role: 'assistant', content: forApi }];
 
-      if (showIntensityUi) {
+      // 강도 제출 후 슬라이더 재표시 조건:
+      //   마커가 있으면서 AND 실제 강도 질문처럼 보일 때만 재표시
+      //   → Claude가 마커를 잘못 붙인 인정·감사 응답에서 오탐 방지
+      if (reply.includes(RAPO_UI_INTENSITY_MARKER) && isIntensityQuestion(forApi)) {
         setAwaitingIntensityInComposer(true);
         setPendingIntensity(0);
       }
@@ -306,10 +278,6 @@ export default function RapoScreen() {
     setAwaitingIntensityInComposer(false);
     setPendingIntensity(0);
     intensitySubmittingRef.current = false;
-  }, []);
-
-  const onQuickPrompt = useCallback((label: string) => {
-    setDraft((prev) => (prev.trim().length > 0 ? `${prev.trim()}\n${label}` : label));
   }, []);
 
   const renderItem = useCallback(
@@ -351,23 +319,6 @@ export default function RapoScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        <View style={styles.chipsBlock}>
-          <Text style={styles.chipsLabel}>이렇게 시작해볼 수 있어요</Text>
-          <View style={styles.chipsRow}>
-            {QUICK_PROMPTS.map((label) => (
-              <Pressable
-                key={label}
-                onPress={() => onQuickPrompt(label)}
-                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`빠른 입력: ${label}`}
-              >
-                <Text style={styles.chipText}>{label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
         <FlatList
           ref={listRef}
           data={messages}
@@ -490,41 +441,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingHorizontal: H_PAD,
     paddingTop: 10,
-  },
-  chipsBlock: {
-    paddingHorizontal: H_PAD,
-    paddingTop: 10,
-    paddingBottom: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.ocean.tideBorder,
-    backgroundColor: Colors.background,
-  },
-  chipsLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textLight,
-    marginBottom: 10,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.ocean.cardEdge,
-  },
-  chipPressed: {
-    backgroundColor: Colors.ocean.heroWash,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.accent,
   },
   composerOuter: {
     backgroundColor: Colors.background,
