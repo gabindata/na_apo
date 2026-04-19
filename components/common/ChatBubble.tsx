@@ -8,42 +8,48 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/colors';
 
-export type ChatBubbleRole = 'rapo' | 'user';
+export type ChatBubbleRole = 'rapo' | 'apo' | 'user';
 
 export type ChatBubbleProps = {
   role: ChatBubbleRole;
   children: React.ReactNode;
   /** 하단 메타 (예: 오전 10:24) */
   timeLabel?: string;
-  /** 라포 말풍선만: 아바타 숨김 (연속 메시지 등) */
-  hideRapoAvatar?: boolean;
+  /** 봇 말풍선: 아바타 숨김 (연속 메시지 등) */
+  hideBotAvatar?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
   accessibilityLabel?: string;
 };
 
 const RAPO = {
-  /** 탭 아이콘과 통일 (해마 라포 캐릭터 톤) */
   face: '🌀',
   name: '라포',
+} as const;
+
+const APO = {
+  face: '🐬',
+  name: '아포',
 } as const;
 
 export function ChatBubble({
   role,
   children,
   timeLabel,
-  hideRapoAvatar = false,
+  hideBotAvatar = false,
   style,
   testID,
   accessibilityLabel,
 }: ChatBubbleProps) {
+  const isBot = role === 'rapo' || role === 'apo';
   const isRapo = role === 'rapo';
+  const botMeta = role === 'apo' ? APO : RAPO;
 
   const defaultA11y =
     typeof children === 'string'
-      ? `${isRapo ? RAPO.name : '나'}: ${children}`
-      : isRapo
-        ? `${RAPO.name} 메시지`
+      ? `${isBot ? botMeta.name : '나'}: ${children}`
+      : isBot
+        ? `${botMeta.name} 메시지`
         : '내 메시지';
 
   return (
@@ -51,39 +57,39 @@ export function ChatBubble({
       testID={testID}
       accessibilityRole="text"
       accessibilityLabel={accessibilityLabel ?? defaultA11y}
-      style={[styles.row, isRapo ? styles.rowRapo : styles.rowUser, style]}
+      style={[styles.row, isBot ? styles.rowRapo : styles.rowUser, style]}
     >
-      {isRapo && !hideRapoAvatar && (
+      {isBot && !hideBotAvatar && (
         <View style={styles.rapoAvatar} accessibilityElementsHidden importantForAccessibility="no">
-          <Text style={styles.rapoAvatarEmoji}>{RAPO.face}</Text>
+          <Text style={styles.rapoAvatarEmoji}>{botMeta.face}</Text>
         </View>
       )}
-      {isRapo && hideRapoAvatar && <View style={styles.rapoAvatarSpacer} />}
+      {isBot && hideBotAvatar && <View style={styles.rapoAvatarSpacer} />}
 
       <View
         style={[
           styles.bubbleColumn,
-          isRapo ? styles.bubbleColumnRapo : styles.bubbleColumnUser,
+          isBot ? styles.bubbleColumnRapo : styles.bubbleColumnUser,
         ]}
       >
-        {isRapo && (
+        {isBot && (
           <Text
             style={styles.rapoName}
             accessibilityElementsHidden
             importantForAccessibility="no"
           >
-            {RAPO.name}
+            {botMeta.name}
           </Text>
         )}
         <View
           style={[
             styles.bubble,
-            isRapo ? styles.bubbleRapo : styles.bubbleUser,
+            isBot ? styles.bubbleRapo : styles.bubbleUser,
           ]}
         >
           {typeof children === 'string' ? (
             <Text
-              style={[styles.messageText, isRapo ? styles.textRapo : styles.textUser]}
+              style={[styles.messageText, isBot ? styles.textRapo : styles.textUser]}
             >
               {children}
             </Text>
@@ -93,7 +99,7 @@ export function ChatBubble({
         </View>
         {timeLabel ? (
           <Text
-            style={[styles.time, isRapo ? styles.timeRapo : styles.timeUser]}
+            style={[styles.time, isBot ? styles.timeRapo : styles.timeUser]}
             accessibilityElementsHidden
             importantForAccessibility="no"
           >

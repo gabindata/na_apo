@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../../components/common/Header';
-import { ChatBubble } from '../../components/rapo/ChatBubble';
+import { ChatBubble } from '../../components/common/ChatBubble';
 import { IntensitySlider } from '../../components/rapo/IntensitySlider';
 import { Colors } from '../../constants/colors';
 import { RAPO_UI_INTENSITY_MARKER } from '../../constants/prompts';
@@ -321,7 +321,7 @@ export default function RapoScreen() {
       return (
         <ChatBubble
           role={isRapo ? 'rapo' : 'user'}
-          hideRapoAvatar={hideAvatar}
+          hideBotAvatar={hideAvatar}
         >
           {item.text}
         </ChatBubble>
