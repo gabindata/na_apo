@@ -6,9 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// 프롬프트는 서버에만 존재 → 클라이언트에 노출되지 않음
-// constants/prompts.ts 의 RAPO_UI_INTENSITY_MARKER 와 동일해야 함
+// constants/prompts.ts 의 마커와 동일해야 함
 const RAPO_UI_INTENSITY_MARKER = '<<NAAPO_UI:INTENSITY>>';
+const RAPO_UI_SAVE_MARKER = '<<NAAPO_UI:SAVE_READY>>';
 
 const RAPO_SYSTEM_PROMPT = `
 당신은 '라포'입니다. 나아포 앱의 통증 기록 챗봇이며, 귀엽고 따뜻한 해마 캐릭터입니다.
@@ -38,11 +38,11 @@ const RAPO_SYSTEM_PROMPT = `
 6. 오늘 수면 시간을 물어보세요.
 7. 오늘 감정 상태를 물어보세요 (좋음 / 보통 / 나쁨).
 8. 오늘 특별한 일이 있었는지 간단히 물어보세요.
-9. 모든 정보가 모이면 짧게 정리한 뒤 저장 의사를 확인하세요.
-- 통증이 없다고 하면, 오늘의 전반적인 컨디션만 간단히 기록할 수 있도록 안내하세요.
+9. 모든 정보가 모이면 1~2문장으로 따뜻하게 정리한 뒤, 응답 맨 끝에 저장 토큰을 붙이세요.
+- 통증이 없다고 하면, 오늘의 전반적인 컨디션만 간단히 기록할 수 있도록 안내하고 동일하게 저장 토큰을 붙이세요.
 
-## UI 연동 (통증 강도 질문 — 3단계)
-통증 강도(0~10)를 질문하는 턴에서만, 응답의 마지막 문자 뒤에 아래 토큰을 정확히 한 번만 붙이세요.
+## UI 연동 — 통증 강도 토큰 (3단계)
+통증 강도(0~10)를 질문하는 턴에서만, 응답의 맨 끝에 아래 토큰을 정확히 한 번만 붙이세요.
 토큰: ${RAPO_UI_INTENSITY_MARKER}
 
 절대 규칙:
@@ -51,8 +51,18 @@ const RAPO_SYSTEM_PROMPT = `
 - 통증 강도 질문이 아닌 경우에는 절대 토큰을 포함하지 마세요.
 - 토큰 앞뒤에 공백이나 다른 문자를 추가하지 마세요.
 
+## UI 연동 — 저장 토큰 (9단계)
+모든 정보 수집이 완료된 턴에서만, 응답의 맨 끝에 아래 토큰을 정확히 한 번만 붙이세요.
+토큰: ${RAPO_UI_SAVE_MARKER}
+
+절대 규칙:
+- 토큰은 반드시 문장의 맨 끝에만 위치해야 합니다.
+- 한 번의 응답에 토큰은 반드시 한 번만 포함되어야 합니다.
+- 정보 수집이 완료되지 않은 경우에는 절대 토큰을 포함하지 마세요.
+- 토큰 앞뒤에 공백이나 다른 문자를 추가하지 마세요.
+- 강도 토큰과 저장 토큰을 동시에 사용하지 마세요.
+
 ## 출력 규칙
-- 저장 전까지는 JSON을 출력하지 마세요.
 - JSON, 코드블록, 마크다운 형식은 절대 출력하지 마세요.
 - 자연스러운 대화 문장만 출력하세요.
 
@@ -102,17 +112,39 @@ const APO_SYSTEM_PROMPT = `
 - 진료가 필요해 보이면 병원 방문을 권유하세요.
 `.trim();
 
+const RAPO_EXTRACT_PROMPT = `
+당신은 통증 기록 대화에서 저장용 정보를 추출하는 시스템입니다.
+
+## 규칙
+- 반드시 JSON 객체만 출력하세요.
+- 코드블록(\`\`\`)은 절대 사용하지 마세요.
+- 설명, 제목, 추가 문장, 안내 문구를 절대 붙이지 마세요.
+- 모든 필드를 반드시 포함하세요.
+- 알 수 없는 값은 null로 두세요.
+- 추측해서 지어내지 마세요.
+
+## 필드 규칙
+- body_part는 가장 주된 통증 부위 하나를 문자열로 반환하세요.
+- pain_type은 배열로 반환하세요. 언급이 없으면 빈 배열 []로 두세요.
+- intensity는 0~10의 숫자 또는 null입니다.
+- sleep_hours는 숫자 또는 null입니다.
+- emotion은 "좋음", "보통", "나쁨" 중 하나 또는 null입니다.
+- daily_note는 문자열 또는 null입니다.
+- 사용자가 통증이 없다고 한 경우 intensity는 0으로 둘 수 있습니다.
+
+## 반환 형식
+{"body_part":string|null,"intensity":number|null,"pain_type":string[],"sleep_hours":number|null,"emotion":"좋음"|"보통"|"나쁨"|null,"daily_note":string|null}
+`.trim();
+
 type Message = { role: 'user' | 'assistant'; content: string };
-type ChatbotType = 'rapo' | 'apo';
+type ChatbotType = 'rapo' | 'apo' | 'rapo-extract';
 
 Deno.serve(async (req) => {
-  // CORS preflight 처리
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // 요청 파싱
     const body = await req.json().catch(() => null);
 
     if (!body || !Array.isArray(body.messages) || body.messages.length === 0) {
@@ -123,10 +155,16 @@ Deno.serve(async (req) => {
     }
 
     const messages: Message[] = body.messages;
-    const chatbot: ChatbotType = body.chatbot === 'apo' ? 'apo' : 'rapo';
-    const systemPrompt = chatbot === 'apo' ? APO_SYSTEM_PROMPT : RAPO_SYSTEM_PROMPT;
+    const chatbot: ChatbotType =
+      body.chatbot === 'apo' ? 'apo' :
+      body.chatbot === 'rapo-extract' ? 'rapo-extract' :
+      'rapo';
 
-    // API 키는 Supabase secret에서만 가져옴 — 클라이언트에 절대 노출 안 됨
+    const systemPrompt =
+      chatbot === 'apo' ? APO_SYSTEM_PROMPT :
+      chatbot === 'rapo-extract' ? RAPO_EXTRACT_PROMPT :
+      RAPO_SYSTEM_PROMPT;
+
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) {
       console.error('[chat] ANTHROPIC_API_KEY secret이 설정되지 않았습니다.');
@@ -136,25 +174,25 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Claude API 호출 — dangerouslyAllowBrowser 불필요 (서버 환경)
     const anthropic = new Anthropic({ apiKey });
 
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      // extract는 JSON만 반환하므로 토큰 절약
+      max_tokens: chatbot === 'rapo-extract' ? 512 : 1024,
       system: systemPrompt,
       messages,
     });
-    
+
     const reply = response.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n');
-    
+
     if (!reply.trim()) {
       throw new Error('Claude 텍스트 응답이 비어 있습니다.');
     }
-    
+
     return new Response(
       JSON.stringify({ reply }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -162,7 +200,7 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error('[chat] 실제 오류:', err);
-  
+
     return new Response(
       JSON.stringify({
         error: err instanceof Error ? err.message : String(err),

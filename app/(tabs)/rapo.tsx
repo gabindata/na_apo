@@ -17,8 +17,8 @@ import { Header } from '../../components/common/Header';
 import { ChatBubble } from '../../components/common/ChatBubble';
 import { IntensitySlider } from '../../components/rapo/IntensitySlider';
 import { Colors } from '../../constants/colors';
-import { RAPO_UI_INTENSITY_MARKER } from '../../constants/prompts';
-import { sendMessage, type Message as ApiMessage } from '../../lib/claude';
+import { RAPO_UI_INTENSITY_MARKER, RAPO_UI_SAVE_MARKER } from '../../constants/prompts';
+import { sendMessage, extractPainRecord, type Message as ApiMessage } from '../../lib/claude';
 import { supabase } from '../../lib/supabase';
 
 const H_PAD = 20;
@@ -40,19 +40,25 @@ function createId() {
 }
 
 function stripRapoUiMarkers(raw: string): string {
-  return raw.split(RAPO_UI_INTENSITY_MARKER).join('').trim();
+  return raw
+    .split(RAPO_UI_INTENSITY_MARKER).join('')
+    .split(RAPO_UI_SAVE_MARKER).join('')
+    .trim();
 }
 
 function parseRapoAssistantReply(raw: string): {
   visible: string;
   showIntensityUi: boolean;
+  showSaveUi: boolean;
   forApi: string;
 } {
-  const hasMarker = raw.includes(RAPO_UI_INTENSITY_MARKER);
+  const hasIntensityMarker = raw.includes(RAPO_UI_INTENSITY_MARKER);
+  const hasSaveMarker = raw.includes(RAPO_UI_SAVE_MARKER);
   const forApi = stripRapoUiMarkers(raw);
-  const showIntensityUi = hasMarker || isIntensityQuestion(forApi);
+  const showIntensityUi = hasIntensityMarker || isIntensityQuestion(forApi);
+  const showSaveUi = hasSaveMarker;
   const visible = forApi.length > 0 ? forApi : '통증 강도를 알려주세요.';
-  return { visible, showIntensityUi, forApi };
+  return { visible, showIntensityUi, showSaveUi, forApi };
 }
 
 /**
@@ -104,6 +110,10 @@ export default function RapoScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [awaitingIntensityInComposer, setAwaitingIntensityInComposer] = useState(false);
   const [pendingIntensity, setPendingIntensity] = useState(0);
+  const [showSaveButton, setShowSaveButton] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<'idle' | 'success' | 'error'>('idle');
+  const [hasSaved, setHasSaved] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [composerHeight, setComposerHeight] = useState(0);
@@ -114,14 +124,9 @@ export default function RapoScreen() {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      console.log('SESSION CHECK');
-      console.log('session:', data.session);
-      console.log('user id:', data.session?.user?.id);
-      console.log('access token exists:', !!data.session?.access_token);
-      console.log('auth error:', error);
+      const { error } = await supabase.auth.getSession();
+      if (error) console.warn('[Rapo] 세션 확인 실패:', error.message);
     };
-
     checkSession();
   }, []);
 
@@ -144,7 +149,7 @@ export default function RapoScreen() {
     };
   }, []);
 
-  const canSend = draft.trim().length > 0 && !isLoading;
+  const canSend = draft.trim().length > 0 && !isLoading && !isSaving && !hasSaved;
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => {
@@ -191,7 +196,7 @@ export default function RapoScreen() {
 
       if (currentRequestId !== requestIdRef.current) return;
 
-      const { visible, showIntensityUi, forApi } = parseRapoAssistantReply(reply);
+      const { visible, showIntensityUi, showSaveUi, forApi } = parseRapoAssistantReply(reply);
 
       setMessages((prev) => [...prev, { id: createId(), role: 'assistant', text: visible }]);
       apiHistory.current = [...nextApiHistory, { role: 'assistant', content: forApi }];
@@ -199,6 +204,10 @@ export default function RapoScreen() {
       if (showIntensityUi) {
         setAwaitingIntensityInComposer(true);
         setPendingIntensity(0);
+      }
+      if (showSaveUi) {
+        setShowSaveButton(true);
+        setSaveResult('idle');
       }
     } catch (err) {
       if (currentRequestId !== requestIdRef.current) return;
@@ -240,7 +249,7 @@ export default function RapoScreen() {
 
       if (currentRequestId !== requestIdRef.current) return;
 
-      const { visible, forApi } = parseRapoAssistantReply(reply);
+      const { visible, forApi, showSaveUi } = parseRapoAssistantReply(reply);
 
       setMessages((prev) => [...prev, { id: createId(), role: 'assistant', text: visible }]);
       apiHistory.current = [...nextApiHistory, { role: 'assistant', content: forApi }];
@@ -251,6 +260,10 @@ export default function RapoScreen() {
       if (reply.includes(RAPO_UI_INTENSITY_MARKER) && isIntensityQuestion(forApi)) {
         setAwaitingIntensityInComposer(true);
         setPendingIntensity(0);
+      }
+      if (showSaveUi) {
+        setShowSaveButton(true);
+        setSaveResult('idle');
       }
     } catch (err) {
       if (currentRequestId !== requestIdRef.current) return;
@@ -277,8 +290,79 @@ export default function RapoScreen() {
     setIsLoading(false);
     setAwaitingIntensityInComposer(false);
     setPendingIntensity(0);
+    setShowSaveButton(false);
+    setIsSaving(false);
+    setSaveResult('idle');
+    setHasSaved(false);
     intensitySubmittingRef.current = false;
   }, []);
+
+  const onSave = useCallback(async () => {
+    if (isSaving || hasSaved || apiHistory.current.length === 0) return;
+
+    setIsSaving(true);
+    setShowSaveButton(false);
+
+    try {
+      const extracted = await extractPainRecord(apiHistory.current);
+
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error('로그인이 필요해요.');
+
+      const { error: insertError } = await supabase.from('pain_records').insert({
+        user_id: user.id,
+        body_part: extracted.body_part,
+        intensity: extracted.intensity,
+        pain_type: extracted.pain_type,
+        sleep_hours: extracted.sleep_hours,
+        emotion: extracted.emotion,
+        daily_note: extracted.daily_note,
+        recorded_at: new Date().toISOString(),
+      });
+
+      if (insertError) throw insertError;
+
+      // 코인 지급은 기록 저장과 분리 — 실패해도 기록 자체는 성공으로 처리
+      let coinGranted = false;
+      try {
+        const { error: rpcError } = await supabase.rpc('increment_user_coins', {
+          p_user_id: user.id,
+          p_amount: 10,
+        });
+        coinGranted = !rpcError;
+        if (rpcError) console.warn('[Rapo] 코인 지급 실패:', rpcError.message);
+      } catch (rpcErr) {
+        console.warn('[Rapo] 코인 RPC 호출 실패:', rpcErr);
+      }
+
+      setHasSaved(true);
+      setSaveResult('success');
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: createId(),
+          role: 'assistant',
+          text: coinGranted
+            ? '기록이 저장됐어요! 🌊 오늘도 잘 기록해줘서 고마워요. 코인 10개를 드렸어요.'
+            : '기록이 저장됐어요! 🌊 오늘도 잘 기록해줘서 고마워요.',
+        },
+      ]);
+    } catch (err) {
+      console.error('[Rapo] 저장 실패:', err);
+      setSaveResult('error');
+      setShowSaveButton(true);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: createId(),
+          role: 'assistant',
+          text: '저장 중에 문제가 생겼어요. 다시 시도해줘요. 😢',
+        },
+      ]);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [isSaving, hasSaved]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: ChatMessage; index: number }) => {
@@ -340,6 +424,25 @@ export default function RapoScreen() {
               <ChatBubble role="rapo">
                 <ActivityIndicator size="small" color={Colors.accent} />
               </ChatBubble>
+            ) : isSaving ? (
+              <View style={styles.saveRow}>
+                <ActivityIndicator size="small" color={Colors.accent} />
+                <Text style={styles.savingText}>저장하는 중...</Text>
+              </View>
+            ) : showSaveButton ? (
+              <View style={styles.saveRow}>
+                <Pressable
+                  onPress={onSave}
+                  style={({ pressed }) => [
+                    styles.saveBtn,
+                    pressed && styles.saveBtnPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="오늘 기록 저장하기"
+                >
+                  <Text style={styles.saveBtnText}>💾  오늘 기록 저장하기</Text>
+                </Pressable>
+              </View>
             ) : null
           }
         />
@@ -384,36 +487,50 @@ export default function RapoScreen() {
             </View>
           )}
 
-          <View style={styles.composerInner}>
-            <TextInput
-              style={styles.input}
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="오늘 있었던 일을 적어보세요…"
-              placeholderTextColor={Colors.textLight}
-              multiline
-              maxLength={4000}
-              textAlignVertical="top"
-              accessibilityLabel="메시지 입력"
-              blurOnSubmit={false}
-            />
+          {hasSaved ? (
             <Pressable
-              onPress={onSend}
-              disabled={!canSend}
+              onPress={onReset}
               style={({ pressed }) => [
-                styles.sendBtn,
-                !canSend && styles.sendBtnDisabled,
-                pressed && canSend && styles.sendBtnPressed,
+                styles.newChatBtn,
+                pressed && styles.newChatBtnPressed,
               ]}
               accessibilityRole="button"
-              accessibilityLabel="보내기"
-              accessibilityState={{ disabled: !canSend }}
+              accessibilityLabel="새로운 기록 시작하기"
             >
-              <Text style={[styles.sendBtnText, !canSend && styles.sendBtnTextDisabled]}>
-                보내기
-              </Text>
+              <Text style={styles.newChatBtnText}>🌊  새로운 기록 시작하기</Text>
             </Pressable>
-          </View>
+          ) : (
+            <View style={styles.composerInner}>
+              <TextInput
+                style={styles.input}
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="오늘 있었던 일을 적어보세요…"
+                placeholderTextColor={Colors.textLight}
+                multiline
+                maxLength={4000}
+                textAlignVertical="top"
+                accessibilityLabel="메시지 입력"
+                blurOnSubmit={false}
+              />
+              <Pressable
+                onPress={onSend}
+                disabled={!canSend}
+                style={({ pressed }) => [
+                  styles.sendBtn,
+                  !canSend && styles.sendBtnDisabled,
+                  pressed && canSend && styles.sendBtnPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="보내기"
+                accessibilityState={{ disabled: !canSend }}
+              >
+                <Text style={[styles.sendBtnText, !canSend && styles.sendBtnTextDisabled]}>
+                  보내기
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -448,6 +565,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: H_PAD,
     /** 말풍선 row marginBottom(10)만으로 말풍선 간격과 비슷하게 유지 — paddingTop을 두면 간격이 커짐 */
     paddingTop: 10,
+  },
+  saveRow: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: H_PAD,
+    gap: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  saveBtn: {
+    paddingHorizontal: 28,
+    paddingVertical: 13,
+    borderRadius: 20,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
+  saveBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.white,
+    letterSpacing: -0.2,
+  },
+  savingText: {
+    fontSize: 14,
+    color: Colors.textLight,
+    marginLeft: 8,
   },
   composerIntensity: {
     marginBottom: 10,
@@ -506,5 +654,23 @@ const styles = StyleSheet.create({
   },
   sendBtnTextDisabled: {
     color: Colors.textLight,
+  },
+  newChatBtn: {
+    alignSelf: 'stretch',
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newChatBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  newChatBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.white,
+    letterSpacing: -0.2,
   },
 });
