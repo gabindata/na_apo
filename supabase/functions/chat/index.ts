@@ -6,9 +6,42 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ── 응답 헬퍼 [7] ──────────────────────────────────────────────────────────
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function errorResponse(message: string, status = 400): Response {
+  return jsonResponse({ error: message }, status);
+}
+
 // constants/prompts.ts 의 마커와 동일해야 함
 const RAPO_UI_INTENSITY_MARKER = '<<NAAPO_UI:INTENSITY>>';
 const RAPO_UI_SAVE_MARKER = '<<NAAPO_UI:SAVE_READY>>';
+
+// ── 허용 값 목록 [1][3] ────────────────────────────────────────────────────
+const ALLOWED_CHATBOT_TYPES = ['rapo', 'apo', 'rapo-extract', 'prescription-vision'] as const;
+type ChatbotType = typeof ALLOWED_CHATBOT_TYPES[number];
+
+const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+type AllowedMediaType = typeof ALLOWED_MEDIA_TYPES[number];
+
+// 모바일 사진 업로드 기준 상한 — base64 ~8 MB (원본 약 6 MB) [4]
+const MAX_IMAGE_BASE64_LENGTH = 8 * 1024 * 1024;
+
+// ── Vision 응답 마크다운 펜스 방어 제거 [5] ───────────────────────────────
+function stripMarkdownFences(text: string): string {
+  return text
+    .trim()
+    .replace(/^```[a-zA-Z]*\r?\n?/, '')
+    .replace(/\r?\n?```$/, '')
+    .trim();
+}
+
+// ── 시스템 프롬프트 ────────────────────────────────────────────────────────
 
 const RAPO_SYSTEM_PROMPT = `
 당신은 '라포'입니다. 나아포 앱의 통증 기록 챗봇이며, 귀엽고 따뜻한 해마 캐릭터입니다.
@@ -112,6 +145,32 @@ const APO_SYSTEM_PROMPT = `
 - 진료가 필요해 보이면 병원 방문을 권유하세요.
 `.trim();
 
+// [8] 의료 안전 강화 — 이미지에 보이는 텍스트만 추출, 추론/추측 금지
+const PRESCRIPTION_VISION_PROMPT = `
+당신은 처방전 또는 약 봉투/설명서 사진에서 텍스트를 읽어 구조화하는 시스템입니다.
+
+## 핵심 원칙
+- 이미지에 실제로 인쇄된 텍스트만 추출하세요.
+- 약 이름에서 효능·부작용·병명을 추론하거나 지어내지 마세요.
+- 이미지에서 읽을 수 없는 값은 반드시 null 또는 빈 배열로 두세요.
+- 추측, 일반 지식 보완, 상식적 유추는 절대 하지 마세요.
+
+## 출력 규칙
+- 반드시 JSON 객체만 출력하세요.
+- 코드블록(\`\`\`)은 절대 사용하지 마세요.
+- 설명, 제목, 추가 문장을 절대 붙이지 마세요.
+
+## 필드별 추출 규칙
+- medicine_name: 이미지에 표시된 약 이름. 없으면 null.
+- diagnosis: 이미지에 명시된 병명·진단명 텍스트만 사용. 약 이름으로 병명을 추론하지 마세요. 없으면 null.
+- dosage_rule: 이미지에 표시된 복용 방법·용량·횟수. 없으면 null.
+- effects: 이미지에 명시된 효능·효과 항목만 배열로 반환. 이미지에 없으면 반드시 빈 배열 [].
+- side_effects: 이미지에 명시된 부작용·주의사항 항목만 배열로 반환. 이미지에 없으면 반드시 빈 배열 [].
+
+## 반환 형식
+{"medicine_name":string|null,"diagnosis":string|null,"dosage_rule":string|null,"effects":string[],"side_effects":string[]}
+`.trim();
+
 const RAPO_EXTRACT_PROMPT = `
 당신은 통증 기록 대화에서 저장용 정보를 추출하는 시스템입니다.
 
@@ -137,7 +196,6 @@ const RAPO_EXTRACT_PROMPT = `
 `.trim();
 
 type Message = { role: 'user' | 'assistant'; content: string };
-type ChatbotType = 'rapo' | 'apo' | 'rapo-extract';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -146,39 +204,102 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => null);
-
-    if (!body || !Array.isArray(body.messages) || body.messages.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'messages 배열이 필요합니다.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (!body) {
+      return errorResponse('요청 바디가 필요합니다.');
     }
 
-    const messages: Message[] = body.messages;
-    const chatbot: ChatbotType =
-      body.chatbot === 'apo' ? 'apo' :
-      body.chatbot === 'rapo-extract' ? 'rapo-extract' :
-      'rapo';
+    // [1] chatbot 타입 검증 — 허용 값 외에는 400 반환
+    if (!ALLOWED_CHATBOT_TYPES.includes(body.chatbot)) {
+      return errorResponse(
+        `chatbot 값이 올바르지 않습니다. 허용 값: ${ALLOWED_CHATBOT_TYPES.join(', ')}`
+      );
+    }
+    const chatbot = body.chatbot as ChatbotType;
 
+    // [2] non-vision chatbot: messages 배열 및 각 항목 검증
+    if (chatbot !== 'prescription-vision') {
+      if (!Array.isArray(body.messages) || body.messages.length === 0) {
+        return errorResponse('messages 배열이 필요합니다.');
+      }
+      for (const msg of body.messages as unknown[]) {
+        if (
+          !msg ||
+          typeof msg !== 'object' ||
+          ((msg as Record<string, unknown>).role !== 'user' &&
+            (msg as Record<string, unknown>).role !== 'assistant')
+        ) {
+          return errorResponse('messages[].role은 "user" 또는 "assistant"여야 합니다.');
+        }
+        if (typeof (msg as Record<string, unknown>).content !== 'string') {
+          return errorResponse('messages[].content는 문자열이어야 합니다.');
+        }
+      }
+    }
+
+    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!apiKey) {
+      console.error('[chat] ANTHROPIC_API_KEY secret이 설정되지 않았습니다.');
+      return errorResponse('서버 설정 오류입니다.', 500);
+    }
+
+    const anthropic = new Anthropic({ apiKey });
+
+    // ── 처방 사진 분석 — vision API 별도 처리 ──────────────────────────────
+    if (chatbot === 'prescription-vision') {
+      // [4] image 필드 검증 — 존재, 문자열, 비어있지 않음, 크기 상한
+      if (!body.image || typeof body.image !== 'string' || body.image.trim() === '') {
+        return errorResponse('image 필드가 필요합니다.');
+      }
+      if (body.image.length > MAX_IMAGE_BASE64_LENGTH) {
+        return errorResponse('이미지가 너무 큽니다. 8MB 이하의 이미지를 사용해주세요.');
+      }
+
+      // [3] mediaType 검증 — 허용 형식 외 400 반환
+      if (!body.mediaType || !ALLOWED_MEDIA_TYPES.includes(body.mediaType)) {
+        return errorResponse(
+          `지원하지 않는 이미지 형식입니다. 허용 형식: ${ALLOWED_MEDIA_TYPES.join(', ')}`
+        );
+      }
+      const mediaType = body.mediaType as AllowedMediaType;
+
+      const visionResponse = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        system: PRESCRIPTION_VISION_PROMPT,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: body.image } },
+            { type: 'text', text: '이 이미지에서 약 정보를 분석해서 JSON으로 반환해주세요.' },
+          ],
+        }],
+      });
+
+      const rawVisionReply = visionResponse.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n');
+
+      // [5] 마크다운 펜스 방어적 제거
+      const visionReply = stripMarkdownFences(rawVisionReply);
+
+      // [6] 빈 응답 체크
+      if (!visionReply) {
+        throw new Error('Vision Claude 텍스트 응답이 비어 있습니다.');
+      }
+
+      return jsonResponse({ reply: visionReply });
+    }
+
+    // ── 일반 챗봇 처리 ──────────────────────────────────────────────────────
+    const messages = body.messages as Message[];
     const systemPrompt =
       chatbot === 'apo' ? APO_SYSTEM_PROMPT :
       chatbot === 'rapo-extract' ? RAPO_EXTRACT_PROMPT :
       RAPO_SYSTEM_PROMPT;
 
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!apiKey) {
-      console.error('[chat] ANTHROPIC_API_KEY secret이 설정되지 않았습니다.');
-      return new Response(
-        JSON.stringify({ error: '서버 설정 오류입니다.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const anthropic = new Anthropic({ apiKey });
-
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      // extract는 JSON만 반환하므로 토큰 절약
       max_tokens: chatbot === 'rapo-extract' ? 512 : 1024,
       system: systemPrompt,
       messages,
@@ -189,23 +310,18 @@ Deno.serve(async (req) => {
       .map((block) => block.text)
       .join('\n');
 
+    // [6] 빈 응답 체크
     if (!reply.trim()) {
       throw new Error('Claude 텍스트 응답이 비어 있습니다.');
     }
 
-    return new Response(
-      JSON.stringify({ reply }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ reply });
 
   } catch (err) {
     console.error('[chat] 실제 오류:', err);
-
-    return new Response(
-      JSON.stringify({
-        error: err instanceof Error ? err.message : String(err),
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    return errorResponse(
+      err instanceof Error ? err.message : String(err),
+      500,
     );
   }
 });
