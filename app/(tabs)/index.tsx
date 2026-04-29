@@ -1,9 +1,14 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { Calendar } from 'react-native-calendars';
+import type { DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Card } from '../../components/common/Card';
 import { Header } from '../../components/common/Header';
 import { Colors } from '../../constants/colors';
+import { fetchMonthlyRecords, fetchWeeklyStats } from '../../lib/painRecords';
 
 const H_PAD = 20;
 const SECTION_GAP = 22;
@@ -21,6 +26,81 @@ function OceanSectionTitle({ label }: { label: string }) {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() + 1 };
+  });
+  const [monthlyRecords, setMonthlyRecords] = useState<{ date: string; intensity: number }[]>([]);
+  const [stats, setStats] = useState<{
+    topBodyPart: string;
+    avgIntensity: number;
+    recordCount: number;
+  } | null>(null);
+
+  const intensityColor = useCallback((intensity: number) => {
+    if (intensity <= 0) return Colors.heatmap.none;
+    if (intensity <= 3) return Colors.heatmap.low;
+    if (intensity <= 6) return Colors.heatmap.mid;
+    if (intensity <= 8) return Colors.heatmap.high;
+    return Colors.heatmap.severe;
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const data = await fetchMonthlyRecords(visibleMonth.year, visibleMonth.month);
+        if (!mounted) return;
+        setMonthlyRecords(data);
+      } catch (err) {
+        console.error('[Home] 월별 통증 기록 조회 실패:', err);
+        if (mounted) setMonthlyRecords([]);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [visibleMonth.month, visibleMonth.year]);
+
+  const markedDates = useMemo(() => {
+    return monthlyRecords.reduce<Record<string, { customStyles: { container: { backgroundColor: string } } }>>(
+      (acc, item) => {
+        acc[item.date] = {
+          customStyles: {
+            container: {
+              backgroundColor: intensityColor(item.intensity),
+            },
+          },
+        };
+        return acc;
+      },
+      {},
+    );
+  }, [intensityColor, monthlyRecords]);
+
+  // Home 탭이 다시 포커스를 얻을 때마다 주간 통계를 갱신
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+
+      (async () => {
+        try {
+          const data = await fetchWeeklyStats();
+          if (!mounted) return;
+          setStats(data);
+        } catch (err) {
+          console.error('[Home] 주간 통계 조회 실패:', err);
+          if (mounted) setStats(null);
+        }
+      })();
+
+      return () => {
+        mounted = false;
+      };
+    }, []),
+  );
 
   return (
     <View style={styles.screenRoot}>
@@ -150,17 +230,38 @@ export default function HomeScreen() {
                 />
               ))}
             </View>
-            <View style={styles.calendarPlaceholder}>
-              <Text style={styles.calendarPlaceholderText}>캘린더 영역</Text>
-            </View>
-            <Text style={styles.placeholderCaption}>
-              react-native-calendars 히트맵 연동 예정
-            </Text>
+            <Calendar
+              markingType="custom"
+              markedDates={markedDates}
+              onMonthChange={(date: DateData) => {
+                setVisibleMonth({ year: date.year, month: date.month });
+              }}
+              theme={{
+                backgroundColor: 'transparent',
+                calendarBackground: 'transparent',
+                todayTextColor: Colors.accent,
+                selectedDayBackgroundColor: Colors.primary,
+              }}
+              style={styles.calendar}
+            />
           </Card>
         </View>
 
         <View style={styles.section}>
-          <OceanSectionTitle label="이번 주 통계" />
+          <View style={styles.sectionTitleWithAction}>
+            <OceanSectionTitle label="이번 주 통계" />
+            <Pressable
+              onPress={() => router.push('/report')}
+              style={({ pressed }) => [
+                styles.reportLinkBtn,
+                pressed && styles.reportLinkBtnPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="레포트 화면으로 이동"
+            >
+              <Text style={styles.reportLinkBtnText}>레포트 보기</Text>
+            </Pressable>
+          </View>
           <View style={styles.statsRow}>
             <Card
               variant="outlined"
@@ -170,7 +271,7 @@ export default function HomeScreen() {
               accessibilityLabel="가장 자주 아팠던 부위"
             >
               <Text style={styles.statLabel}>가장 자주 아픈 부위</Text>
-              <Text style={styles.statValue}>—</Text>
+              <Text style={styles.statValue}>{stats?.topBodyPart ?? '—'}</Text>
             </Card>
             <View style={styles.statsGap} />
             <Card
@@ -181,7 +282,7 @@ export default function HomeScreen() {
               accessibilityLabel="평균 통증 강도"
             >
               <Text style={styles.statLabel}>평균 강도</Text>
-              <Text style={styles.statValue}>— / 10</Text>
+              <Text style={styles.statValue}>{stats ? `${stats.avgIntensity.toFixed(1)} / 10` : '— / 10'}</Text>
             </Card>
           </View>
           <Card
@@ -192,7 +293,7 @@ export default function HomeScreen() {
             accessibilityLabel="기록 횟수"
           >
             <Text style={styles.statLabel}>기록 횟수</Text>
-            <Text style={styles.statValue}>—회</Text>
+            <Text style={styles.statValue}>{stats ? `${stats.recordCount}회` : '—회'}</Text>
           </Card>
         </View>
       </ScrollView>
@@ -287,10 +388,17 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: SECTION_GAP,
   },
+  sectionTitleWithAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+    flex: 1,
+    minWidth: 0,
   },
   sectionAccent: {
     width: 4,
@@ -304,7 +412,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.text,
     letterSpacing: -0.2,
-    flex: 1,
+    flexGrow: 0,
+    flexShrink: 1,
+    minWidth: 0,
   },
   oceanElevatedCard: {
     borderLeftWidth: 4,
@@ -414,19 +524,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
   },
-  calendarPlaceholder: {
-    height: 168,
+  calendar: {
     borderRadius: 14,
-    backgroundColor: Colors.heatmap.none,
     borderWidth: 1,
     borderColor: Colors.ocean.tideBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calendarPlaceholderText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textLight,
+    paddingBottom: 4,
+    backgroundColor: Colors.heatmap.none,
   },
   statsRow: {
     flexDirection: 'row',
@@ -442,6 +545,25 @@ const styles = StyleSheet.create({
   },
   statsGap: {
     width: 12,
+  },
+  reportLinkBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: Colors.ocean.heroWash,
+    borderWidth: 1,
+    borderColor: Colors.ocean.tideBorder,
+    marginBottom: 10,
+    marginLeft: 'auto',
+    flexShrink: 0,
+  },
+  reportLinkBtnPressed: {
+    opacity: 0.8,
+  },
+  reportLinkBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.accent,
   },
   prescriptionCard: {
     backgroundColor: Colors.white,
