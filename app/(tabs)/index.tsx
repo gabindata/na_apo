@@ -147,39 +147,6 @@ export default function HomeScreen() {
           </Card>
         </View>
 
-        {/* 처방 관리 */}
-        {/* route: app/prescription.tsx가 app 루트(tabs 바깥)에 있으므로 '/prescription'이 올바름 */}
-        <View style={styles.section}>
-          <OceanSectionTitle label="처방 관리" />
-          <Pressable
-            onPress={() => router.push('/prescription')}
-            style={({ pressed }) => [
-              styles.prescriptionCard,
-              pressed && styles.prescriptionCardPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="처방 관리 화면으로 이동"
-            accessibilityHint="복용 중인 약과 처방 메모를 확인하고 추가할 수 있어요"
-          >
-            <View style={styles.prescriptionCardInner}>
-              <View>
-                <Text style={styles.prescriptionCardTitle}>💊 내 처방 확인하기</Text>
-                <Text style={styles.prescriptionCardSub}>
-                  복용 중인 약과 처방 메모를 정리해요
-                </Text>
-              </View>
-              {/* 카드 전체에 accessibilityLabel이 있으므로 화살표는 스크린리더에서 숨김 */}
-              <Text
-                style={styles.prescriptionCardArrow}
-                accessibilityElementsHidden
-                importantForAccessibility="no"
-              >
-                ›
-              </Text>
-            </View>
-          </Pressable>
-        </View>
-
         <View style={styles.section}>
           <OceanSectionTitle label="건강 매거진" />
           <Card
@@ -558,38 +525,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Colors.accent,
-  },
-  prescriptionCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.ocean.cardEdge,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
-    padding: 16,
-  },
-  prescriptionCardPressed: {
-    opacity: 0.85,
-  },
-  prescriptionCardInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  prescriptionCardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  prescriptionCardSub: {
-    fontSize: 13,
-    color: Colors.textLight,
-  },
-  prescriptionCardArrow: {
-    fontSize: 24,
-    color: Colors.textLight,
-    fontWeight: '300',
   },
   statLabel: {
     fontSize: 12,
