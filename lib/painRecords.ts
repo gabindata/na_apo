@@ -15,9 +15,16 @@ export type PainRecord = {
 };
 
 async function requireUserId(): Promise<string> {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error('로그인이 필요해요.');
-  return user.id;
+  // 앱 초기 구동 직후에는 getUser()가 null을 주는 타이밍이 있어 getSession()을 우선 사용
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const sessionUserId = sessionData.session?.user?.id;
+  if (sessionUserId) return sessionUserId;
+
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error('로그인이 필요해요.');
+  return userData.user.id;
 }
 
 function recordTime(row: Pick<PainRecord, 'recorded_at'>): string {
@@ -116,28 +123,25 @@ export async function fetchMonthlyRecords(
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** 이번 주 통계 (월요일 시작 기준, 로컬) */
-export async function fetchWeeklyStats(): Promise<{
+/** 해당 월 통계 (홈 '월별 통계' 표시용) */
+export async function fetchMonthlyStats(year: number, month: number): Promise<{
   topBodyPart: string;
   avgIntensity: number;
   recordCount: number;
 }> {
   const userId = await requireUserId();
-  const { startIso, endIso } = thisWeekRangeIso();
+  const { startIso, endExclusiveIso } = monthRangeUtcStrings(year, month);
 
   const { data, error } = await supabase
     .from('pain_records')
     .select('id, body_part, intensity, recorded_at')
     .eq('user_id', userId)
     .gte('recorded_at', startIso)
-    .lte('recorded_at', endIso);
+    .lt('recorded_at', endExclusiveIso);
 
-  const start = new Date(startIso).getTime();
-  const end = new Date(endIso).getTime();
-  const inRange = (data ?? []).filter((r) => {
-    const t = new Date(recordTime(r)).getTime();
-    return t >= start && t <= end;
-  });
+  if (error) throw error;
+
+  const inRange = data ?? [];
 
   const recordCount = inRange.length;
   if (recordCount === 0) {

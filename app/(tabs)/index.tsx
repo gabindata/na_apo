@@ -4,11 +4,10 @@ import { router } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import type { DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { Card } from '../../components/common/Card';
 import { Header } from '../../components/common/Header';
 import { Colors } from '../../constants/colors';
-import { fetchMonthlyRecords, fetchWeeklyStats } from '../../lib/painRecords';
+import { fetchMonthlyRecords, fetchMonthlyStats } from '../../lib/painRecords';
 
 const H_PAD = 20;
 const SECTION_GAP = 22;
@@ -36,6 +35,7 @@ export default function HomeScreen() {
     avgIntensity: number;
     recordCount: number;
   } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   const intensityColor = useCallback((intensity: number) => {
     if (intensity <= 0) return Colors.heatmap.none;
@@ -49,13 +49,23 @@ export default function HomeScreen() {
     let mounted = true;
 
     (async () => {
+      setStatsLoading(true);
       try {
-        const data = await fetchMonthlyRecords(visibleMonth.year, visibleMonth.month);
+        const [records, monthStats] = await Promise.all([
+          fetchMonthlyRecords(visibleMonth.year, visibleMonth.month),
+          fetchMonthlyStats(visibleMonth.year, visibleMonth.month),
+        ]);
         if (!mounted) return;
-        setMonthlyRecords(data);
+        setMonthlyRecords(records);
+        setStats(monthStats);
       } catch (err) {
         console.error('[Home] 월별 통증 기록 조회 실패:', err);
-        if (mounted) setMonthlyRecords([]);
+        if (mounted) {
+          setMonthlyRecords([]);
+          setStats(null);
+        }
+      } finally {
+        if (mounted) setStatsLoading(false);
       }
     })();
 
@@ -79,28 +89,6 @@ export default function HomeScreen() {
       {},
     );
   }, [intensityColor, monthlyRecords]);
-
-  // Home 탭이 다시 포커스를 얻을 때마다 주간 통계를 갱신
-  useFocusEffect(
-    useCallback(() => {
-      let mounted = true;
-
-      (async () => {
-        try {
-          const data = await fetchWeeklyStats();
-          if (!mounted) return;
-          setStats(data);
-        } catch (err) {
-          console.error('[Home] 주간 통계 조회 실패:', err);
-          if (mounted) setStats(null);
-        }
-      })();
-
-      return () => {
-        mounted = false;
-      };
-    }, []),
-  );
 
   return (
     <View style={styles.screenRoot}>
@@ -249,7 +237,7 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionTitleWithAction}>
-            <OceanSectionTitle label="이번 주 통계" />
+            <OceanSectionTitle label="월별 통계" />
             <Pressable
               onPress={() => router.push('/report')}
               style={({ pressed }) => [
@@ -271,7 +259,9 @@ export default function HomeScreen() {
               accessibilityLabel="가장 자주 아팠던 부위"
             >
               <Text style={styles.statLabel}>가장 자주 아픈 부위</Text>
-              <Text style={styles.statValue}>{stats?.topBodyPart ?? '—'}</Text>
+              <Text style={styles.statValue}>
+                {statsLoading ? '—' : stats?.topBodyPart ? stats.topBodyPart : '—'}
+              </Text>
             </Card>
             <View style={styles.statsGap} />
             <Card
@@ -282,7 +272,9 @@ export default function HomeScreen() {
               accessibilityLabel="평균 통증 강도"
             >
               <Text style={styles.statLabel}>평균 강도</Text>
-              <Text style={styles.statValue}>{stats ? `${stats.avgIntensity.toFixed(1)} / 10` : '— / 10'}</Text>
+              <Text style={styles.statValue}>
+                {statsLoading ? '— / 10' : stats ? `${stats.avgIntensity.toFixed(1)} / 10` : '— / 10'}
+              </Text>
             </Card>
           </View>
           <Card
@@ -293,7 +285,9 @@ export default function HomeScreen() {
             accessibilityLabel="기록 횟수"
           >
             <Text style={styles.statLabel}>기록 횟수</Text>
-            <Text style={styles.statValue}>{stats ? `${stats.recordCount}회` : '—회'}</Text>
+            <Text style={styles.statValue}>
+              {statsLoading ? '—회' : stats ? `${stats.recordCount}회` : '—회'}
+            </Text>
           </Card>
         </View>
       </ScrollView>
