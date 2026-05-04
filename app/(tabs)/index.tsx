@@ -6,6 +6,7 @@ import type { DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../../components/common/Card';
 import { Header } from '../../components/common/Header';
+import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
 import { Colors } from '../../constants/colors';
 import { fetchMonthlyRecords, fetchMonthlyStats } from '../../lib/painRecords';
 
@@ -256,6 +257,11 @@ export default function HomeScreen() {
               {statsLoading ? '—회' : stats ? `${stats.recordCount}회` : '—회'}
             </Text>
           </Card>
+        </View>
+
+        <View style={styles.section}>
+          <OceanSectionTitle label="약 알람" />
+          <MedicineAlarmSection />
         </View>
       </ScrollView>
     </View>
