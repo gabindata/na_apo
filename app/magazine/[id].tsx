@@ -2,10 +2,15 @@ import { ScrollView, StyleSheet, Text, View, Image, useWindowDimensions } from '
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable } from 'react-native';
-import { getMagazineById, type MagazineBlock } from '../../constants/magazines';
+import {
+  MAGAZINES,
+  getMagazineById,
+  type Magazine,
+  type MagazineBlock,
+} from '../../constants/magazines';
 import { Colors } from '../../constants/colors';
 
-const H_PAD = 20;
+const H_PAD = 32;
 
 export default function MagazineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -59,8 +64,77 @@ export default function MagazineScreen() {
             maxImageHeight={maxImageHeight}
           />
         ))}
+
+        <OtherMagazinesSection
+          currentId={magazine.id}
+          onPressMagazine={(nextId) => router.replace(`/magazine/${nextId}`)}
+        />
       </ScrollView>
     </View>
+  );
+}
+
+function OtherMagazinesSection({
+  currentId,
+  onPressMagazine,
+}: {
+  currentId: string;
+  onPressMagazine: (id: string) => void;
+}) {
+  const others = MAGAZINES.filter((m) => m.id !== currentId);
+  if (others.length === 0) return null;
+
+  return (
+    <View style={styles.othersSection}>
+      <View style={styles.othersDivider} />
+      <Text style={styles.othersTitle}>다른 매거진도 읽어보세요</Text>
+      <View style={styles.othersList}>
+        {others.map((mag) => (
+          <OtherMagazineCard
+            key={mag.id}
+            magazine={mag}
+            onPress={() => onPressMagazine(mag.id)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function OtherMagazineCard({
+  magazine,
+  onPress,
+}: {
+  magazine: Magazine;
+  onPress: () => void;
+}) {
+  const thumb = magazine.content.find(
+    (block): block is Extract<MagazineBlock, { type: 'image' }> => block.type === 'image',
+  );
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.otherCard, pressed && styles.otherCardPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`${magazine.title} 매거진으로 이동`}
+    >
+      <View style={styles.otherThumbWrap}>
+        {thumb ? (
+          <Image source={thumb.source} style={styles.otherThumb} resizeMode="cover" />
+        ) : (
+          <View style={[styles.otherThumb, styles.otherThumbPlaceholder]} />
+        )}
+      </View>
+      <View style={styles.otherTextWrap}>
+        <Text style={styles.otherTitle} numberOfLines={2}>
+          {magazine.title}
+        </Text>
+        <Text style={styles.otherSubtitle} numberOfLines={2}>
+          {magazine.subtitle}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -88,7 +162,15 @@ function MagazineBlockView({
       return <Text style={styles.heading}>{block.text}</Text>;
 
     case 'body':
-      return <Text style={styles.body}>{block.text}</Text>;
+      return (
+        <Text
+          style={styles.body}
+          lineBreakStrategyIOS="standard"
+          textBreakStrategy="simple"
+        >
+          {block.text}
+        </Text>
+      );
 
     case 'tips':
       return (
@@ -96,7 +178,13 @@ function MagazineBlockView({
           {block.items.map((item, i) => (
             <View key={i} style={styles.tipRow}>
               <Text style={styles.tipBullet}>✅</Text>
-              <Text style={styles.tipText}>{item}</Text>
+              <Text
+                style={styles.tipText}
+                lineBreakStrategyIOS="standard"
+                textBreakStrategy="simple"
+              >
+                {item}
+              </Text>
             </View>
           ))}
         </View>
@@ -109,7 +197,13 @@ function MagazineBlockView({
       return (
         <View style={styles.highlightBox}>
           <Text style={styles.highlightLabel}>꼭 기억하세요</Text>
-          <Text style={styles.highlightText}>{block.text}</Text>
+          <Text
+            style={styles.highlightText}
+            lineBreakStrategyIOS="standard"
+            textBreakStrategy="simple"
+          >
+            {block.text}
+          </Text>
         </View>
       );
 
@@ -191,7 +285,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 25,
     color: Colors.text,
-    marginBottom: 12,
+    marginBottom: 14,
+    textAlign: 'left',
+    letterSpacing: -0.3,
   },
   tipsBox: {
     gap: 10,
@@ -208,9 +304,12 @@ const styles = StyleSheet.create({
   },
   tipText: {
     flex: 1,
+    minWidth: 0,
     fontSize: 15,
-    lineHeight: 23,
+    lineHeight: 25,
     color: Colors.text,
+    textAlign: 'left',
+    letterSpacing: -0.3,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -222,7 +321,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderLeftWidth: 4,
     borderLeftColor: Colors.primary,
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
     marginVertical: 8,
   },
   highlightLabel: {
@@ -234,8 +334,72 @@ const styles = StyleSheet.create({
   },
   highlightText: {
     fontSize: 15,
-    lineHeight: 24,
+    lineHeight: 25,
     color: Colors.text,
+    textAlign: 'left',
+    letterSpacing: -0.3,
+  },
+  othersSection: {
+    marginTop: 12,
+  },
+  othersDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.ocean?.tideBorder ?? '#D0E8F2',
+    marginBottom: 18,
+  },
+  othersTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.text,
+    letterSpacing: -0.3,
+    marginBottom: 12,
+  },
+  othersList: {
+    gap: 10,
+  },
+  otherCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.ocean?.tideBorder ?? '#D0E8F2',
+    backgroundColor: Colors.white ?? '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    gap: 12,
+  },
+  otherCardPressed: {
+    opacity: 0.7,
+  },
+  otherThumbWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: Colors.ocean?.heroWash ?? '#EBF5FB',
+  },
+  otherThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  otherThumbPlaceholder: {
+    backgroundColor: Colors.ocean?.heroWash ?? '#EBF5FB',
+  },
+  otherTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  otherTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    letterSpacing: -0.2,
+    marginBottom: 4,
+  },
+  otherSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.textLight,
+    lineHeight: 18,
   },
   notFound: {
     flex: 1,
