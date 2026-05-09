@@ -239,9 +239,6 @@ export function MedicineAlarmSection() {
         <View style={styles.cardTopRow}>
           <View>
             <Text style={styles.cardTitle}>💊 약 알람 관리</Text>
-            <Text style={styles.cardSub}>
-              복용 규칙에 맞춰 알람을 추가하고, 복용 종료 시 바로 중단할 수 있어요.
-            </Text>
           </View>
           <Pressable onPress={() => setShowModal(true)} style={styles.addBtn} accessibilityRole="button">
             <Text style={styles.addBtnText}>+ 알람 추가</Text>

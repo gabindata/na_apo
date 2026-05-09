@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import type { DateData } from 'react-native-calendars';
@@ -8,8 +8,10 @@ import { Card } from '../../components/common/Card';
 import { Header } from '../../components/common/Header';
 import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
 import { Colors } from '../../constants/colors';
-import { recommendMagazine } from '../../constants/magazines';
+import { recommendMagazine, type MagazineBlock } from '../../constants/magazines';
+import { useAuth } from '../../contexts/AuthContext';
 import { fetchMonthlyRecords, fetchMonthlyStats } from '../../lib/painRecords';
+import { fetchUserProfile, type UserProfile } from '../../lib/userProfile';
 
 const H_PAD = 20;
 const SECTION_GAP = 22;
@@ -27,6 +29,7 @@ function OceanSectionTitle({ label }: { label: string }) {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() + 1 };
@@ -38,6 +41,25 @@ export default function HomeScreen() {
     recordCount: number;
   } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+
+    (async () => {
+      const data = await fetchUserProfile(user.id);
+      if (mounted) setProfile(data);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   const intensityColor = useCallback((intensity: number) => {
     if (intensity <= 0) return Colors.heatmap.none;
@@ -93,6 +115,13 @@ export default function HomeScreen() {
   }, [intensityColor, monthlyRecords]);
 
   const magazine = useMemo(() => recommendMagazine(stats?.topBodyPart), [stats?.topBodyPart]);
+  const magazineThumb = useMemo(
+    () =>
+      magazine.content.find(
+        (block): block is Extract<MagazineBlock, { type: 'image' }> => block.type === 'image',
+      ),
+    [magazine],
+  );
 
   return (
     <View style={styles.screenRoot}>
@@ -121,13 +150,13 @@ export default function HomeScreen() {
           <View style={styles.heroBubbleS} accessibilityElementsHidden />
           <Text style={styles.heroBrand}>나아포</Text>
           <Text style={styles.heroTagline}>
-            🐬 아포 · 라포(해마)와 함께, 오늘의 통증을 가볍게 기록해요
+            아포·라포와 함께, 오늘의 통증을 가볍게 기록해요
           </Text>
           <View style={styles.heroWave} accessibilityElementsHidden />
         </View>
 
         <View style={styles.section}>
-          <OceanSectionTitle label="프로필 · 캐릭터" />
+          <OceanSectionTitle label="프로필" />
           <Card
             variant="elevated"
             padding="md"
@@ -142,9 +171,26 @@ export default function HomeScreen() {
                 </Text>
               </View>
               <View style={styles.profileCopy}>
-                <Text style={styles.profileHint}>닉네임 · 선택 캐릭터 · 코인</Text>
+                <View style={styles.profileNameRow}>
+                  <Text
+                    style={styles.profileName}
+                    numberOfLines={1}
+                    accessibilityLabel={`닉네임 ${profile?.nickname ?? ''}`}
+                  >
+                    {profile?.nickname ?? '닉네임'}
+                  </Text>
+                  <View style={styles.coinChip} accessibilityLabel={`보유 코인 ${profile?.coins ?? 0}개`}>
+                    <Image
+                      source={require('../../assets/coin.png')}
+                      style={styles.coinIconImage}
+                      resizeMode="contain"
+                      accessibilityElementsHidden
+                    />
+                    <Text style={styles.coinValue}>{profile?.coins ?? 0}</Text>
+                  </View>
+                </View>
                 <Text style={styles.placeholderText}>
-                  기록할수록 바다가 조금씩 밝아져요.
+                  기록할수록 바다가 조금씩 맑아져요.
                 </Text>
               </View>
             </View>
@@ -157,6 +203,7 @@ export default function HomeScreen() {
             onPress={() => router.push(`/magazine/${magazine.id}`)}
             accessibilityRole="button"
             accessibilityLabel={`건강 매거진: ${magazine.title}. 탭하면 읽기`}
+            style={({ pressed }) => [pressed && styles.magazineCardPressed]}
           >
             <Card
               variant="outlined"
@@ -164,11 +211,26 @@ export default function HomeScreen() {
               style={styles.oceanOutlinedCard}
               testID="home-section-magazine"
             >
-              <View style={styles.bannerOcean}>
-                <View style={styles.bannerShine} />
-                <View style={styles.bannerRipple} />
-                <Text style={styles.bannerTitle}>{magazine.title}</Text>
-                <Text style={styles.bannerSub}>{magazine.subtitle}</Text>
+              <View style={styles.magazineRow}>
+                <View style={styles.magazineThumbWrap}>
+                  {magazineThumb ? (
+                    <Image
+                      source={magazineThumb.source}
+                      style={styles.magazineThumb}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.magazineThumb, styles.magazineThumbPlaceholder]} />
+                  )}
+                </View>
+                <View style={styles.magazineTextWrap}>
+                  <Text style={styles.magazineTitle} numberOfLines={2}>
+                    {magazine.title}
+                  </Text>
+                  <Text style={styles.magazineSub} numberOfLines={2}>
+                    {magazine.subtitle}
+                  </Text>
+                </View>
               </View>
             </Card>
           </Pressable>
@@ -423,11 +485,40 @@ const styles = StyleSheet.create({
   profileCopy: {
     flex: 1,
   },
-  profileHint: {
+  profileNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+    flexWrap: 'wrap',
+  },
+  profileName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.accent,
+    letterSpacing: -0.3,
+    flexShrink: 1,
+  },
+  coinChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.ocean.heroWash,
+    borderWidth: 1,
+    borderColor: Colors.ocean.tideBorder,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  coinIconImage: {
+    width: 16,
+    height: 16,
+  },
+  coinValue: {
     fontSize: 13,
     fontWeight: '700',
     color: Colors.accent,
-    marginBottom: 4,
+    letterSpacing: -0.2,
   },
   placeholderText: {
     fontSize: 14,
@@ -439,47 +530,44 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textLight,
   },
-  bannerOcean: {
-    height: 118,
-    borderRadius: 14,
-    backgroundColor: Colors.ocean.bannerDepth,
-    borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+  magazineCardPressed: {
+    opacity: 0.85,
+  },
+  magazineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  magazineThumbWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 12,
     overflow: 'hidden',
-    justifyContent: 'flex-end',
-    padding: 14,
+    backgroundColor: Colors.ocean.heroWash,
   },
-  bannerShine: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: Colors.ocean.bannerShine,
-    top: -70,
-    right: -50,
-    opacity: 0.7,
-  },
-  bannerRipple: {
-    position: 'absolute',
+  magazineThumb: {
     width: '100%',
-    height: 28,
-    bottom: 0,
-    left: 0,
-    backgroundColor: Colors.primary,
-    opacity: 0.12,
+    height: '100%',
   },
-  bannerTitle: {
-    fontSize: 17,
+  magazineThumbPlaceholder: {
+    backgroundColor: Colors.ocean.heroWash,
+  },
+  magazineTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  magazineTitle: {
+    fontSize: 16,
     fontWeight: '800',
     color: Colors.accent,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
+    marginBottom: 4,
   },
-  bannerSub: {
-    marginTop: 4,
+  magazineSub: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.text,
-    opacity: 0.85,
+    color: Colors.textLight,
+    lineHeight: 19,
   },
   heatmapLegend: {
     fontSize: 12,
