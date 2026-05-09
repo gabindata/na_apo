@@ -5,7 +5,6 @@ import { Calendar } from 'react-native-calendars';
 import type { DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../../components/common/Card';
-import { Header } from '../../components/common/Header';
 import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
 import { Colors } from '../../constants/colors';
 import { recommendMagazine, type MagazineBlock } from '../../constants/magazines';
@@ -124,18 +123,7 @@ export default function HomeScreen() {
   );
 
   return (
-    <View style={styles.screenRoot}>
-      <Header
-        title="홈"
-        rightIcon={<Text style={styles.headerAction}>설정</Text>}
-        onPressRight={() => {
-          // TODO: 설정 화면 연결 시 router.push('/settings');
-        }}
-        style={styles.headerStretch}
-        testID="home-header"
-        accessibilityLabel="나아포 홈"
-      />
-
+    <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -148,7 +136,12 @@ export default function HomeScreen() {
           <View style={styles.heroBubbleL} accessibilityElementsHidden />
           <View style={styles.heroBubbleM} accessibilityElementsHidden />
           <View style={styles.heroBubbleS} accessibilityElementsHidden />
-          <Text style={styles.heroBrand}>나아포</Text>
+          <Image
+            source={require('../../assets/naapo_typo_logo_white.png')}
+            style={styles.heroBrandLogo}
+            resizeMode="contain"
+            accessibilityLabel="나아포"
+          />
           <Text style={styles.heroTagline}>
             아포·라포와 함께, 오늘의 통증을 가볍게 기록해요
           </Text>
@@ -342,14 +335,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerStretch: {
-    alignSelf: 'stretch',
-  },
-  headerAction: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
   scroll: {
     flex: 1,
   },
@@ -361,13 +346,11 @@ const styles = StyleSheet.create({
     marginHorizontal: -H_PAD,
     marginBottom: SECTION_GAP,
     paddingHorizontal: H_PAD,
-    paddingTop: 18,
-    paddingBottom: 20,
-    backgroundColor: Colors.ocean.heroWash,
+    paddingTop: 22,
+    paddingBottom: 24,
+    backgroundColor: Colors.primary,
     borderBottomLeftRadius: 26,
     borderBottomRightRadius: 26,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.ocean.tideBorder,
     overflow: 'hidden',
   },
   heroBubbleL: {
@@ -375,7 +358,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: Colors.ocean.bubbleSoft,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     top: -36,
     right: -44,
   },
@@ -384,40 +367,36 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.ocean.bubble,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     top: 28,
     left: -12,
-    opacity: 0.9,
   },
   heroBubbleS: {
     position: 'absolute',
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.32)',
     top: 12,
     right: 52,
-    opacity: 0.85,
   },
-  heroBrand: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.accent,
-    letterSpacing: -0.8,
+  heroBrandLogo: {
+    width: 220,
+    height: 70,
+    alignSelf: 'flex-start',
   },
   heroTagline: {
-    marginTop: 8,
+    marginTop: 6,
     fontSize: 14,
     lineHeight: 21,
-    color: Colors.textLight,
+    color: 'rgba(255, 255, 255, 0.92)',
     fontWeight: '500',
   },
   heroWave: {
     marginTop: 16,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.secondary,
-    opacity: 0.65,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
     alignSelf: 'flex-start',
     width: '42%',
   },

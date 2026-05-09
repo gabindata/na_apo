@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, View, Image, StyleSheet } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { useFonts } from 'expo-font';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { Colors } from '../constants/colors';
+import { FONT_ASSETS, applyGlobalFont } from '../lib/fonts';
 
-// 공개 그룹 상수로 분리 → 나중에 그룹 추가 시 여기만 수정
+// 모듈 로드 시점에 한 번만 패치 → 이후 모든 Text/TextInput 렌더에 자동 반영
+applyGlobalFont();
+
 const PUBLIC_GROUPS = ['(auth)'];
 
 function RootLayoutNav() {
@@ -12,13 +16,15 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
 
+  // 폰트 로드 — 로드 완료 전에는 시스템 폰트로 폴백
+  const [fontsLoaded] = useFonts(FONT_ASSETS);
+
   useEffect(() => {
     if (loading) return;
 
     const inPublicGroup = PUBLIC_GROUPS.includes(segments[0] as string);
     const isAuthenticated = !!session;
 
-    // 이미 올바른 위치에 있으면 redirect 생략
     if (!isAuthenticated && !inPublicGroup) {
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inPublicGroup) {
@@ -26,8 +32,8 @@ function RootLayoutNav() {
     }
   }, [session, loading, segments, router]);
 
-  // 로딩 중엔 스플래시 화면 표시 → 잘못된 화면 스침 방지
-  if (loading) {
+  // 인증 로딩 중 or 폰트 미로드 → 스플래시
+  if (loading || !fontsLoaded) {
     return (
       <View style={styles.splash}>
         <Image
@@ -66,12 +72,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   splashLogo: {
-    width: 140,
-    height: 140,
-    borderRadius: 28,
-    marginBottom: 24,
+    width: 160,
+    height: 160,
   },
   splashSpinner: {
-    marginTop: 8,
+    marginTop: 32,
   },
 });

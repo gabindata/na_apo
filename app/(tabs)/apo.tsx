@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   LayoutChangeEvent,
   Platform,
@@ -12,7 +13,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Header } from '../../components/common/Header';
 import { ChatBubble } from '../../components/common/ChatBubble';
 import { Colors } from '../../constants/colors';
 import { sendMessage, type Message as ApiMessage } from '../../lib/claude';
@@ -21,7 +21,6 @@ const H_PAD = 20;
 const COMPOSER_MIN_HEIGHT = 44;
 const INPUT_MAX_LINES = 5;
 const CHAT_EDGE_VERTICAL_PAD = 4;
-const HEADER_HEIGHT = 88;
 
 type ChatRole = 'user' | 'assistant';
 
@@ -187,20 +186,32 @@ export default function ApoScreen() {
   const composerBottomPad = Math.max(insets.bottom, 10);
 
   return (
-    <View style={styles.screenRoot}>
-      <Header
-        title="아포"
-        rightIcon={<Text style={styles.headerAction}>새 대화</Text>}
-        onPressRight={onReset}
-        style={styles.headerStretch}
-        testID="apo-header"
-        accessibilityLabel="아포 건강 상담 챗봇"
-      />
+    <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
+      <View style={styles.topActionRow}>
+        <Image
+          source={require('../../assets/logo.png')}
+          style={styles.topLogo}
+          resizeMode="contain"
+          accessibilityLabel="나아포"
+        />
+        <Pressable
+          onPress={onReset}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.topActionBtn,
+            pressed && styles.topActionBtnPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="새 대화 시작"
+        >
+          <Text style={styles.topActionText}>새 대화</Text>
+        </Pressable>
+      </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? HEADER_HEIGHT : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
         {/* 접을 수 있는 가이드라인 */}
         <View style={styles.guideBlock}>
@@ -296,10 +307,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerStretch: {
-    alignSelf: 'stretch',
+  topActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: H_PAD,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
-  headerAction: {
+  topLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  topActionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  topActionBtnPressed: {
+    opacity: 0.7,
+    backgroundColor: 'rgba(74, 144, 217, 0.08)',
+  },
+  topActionText: {
     fontSize: 15,
     fontWeight: '600',
     color: Colors.primary,

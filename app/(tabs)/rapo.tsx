@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   LayoutChangeEvent,
@@ -13,7 +14,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Header } from '../../components/common/Header';
 import { ChatBubble } from '../../components/common/ChatBubble';
 import { IntensitySlider } from '../../components/rapo/IntensitySlider';
 import { Colors } from '../../constants/colors';
@@ -95,7 +95,7 @@ const WELCOME_MESSAGES: ChatMessage[] = [
   {
     id: 'welcome-1',
     role: 'assistant',
-    text: '안녕, 나는 라포예요. 🌊\n오늘 있었던 일이나 몸 상태를 편하게 적어줘도 돼요. 나중에 아포와 연결할 기록 챗봇이에요.',
+    text: '안녕하세요, 저는 라포예요. 🌊\n오늘 있었던 일이나 몸 상태를 편하게 적어주세요. 나중에 아포와 연결할 기록 챗봇이에요.',
   },
 ];
 
@@ -388,15 +388,27 @@ export default function RapoScreen() {
   const composerBottomPad = isKeyboardVisible ? 10 : Math.max(insets.bottom, 10);
 
   return (
-    <View style={styles.screenRoot}>
-      <Header
-        title="라포"
-        rightIcon={<Text style={styles.headerAction}>새 대화</Text>}
-        onPressRight={onReset}
-        style={styles.headerStretch}
-        testID="rapo-header"
-        accessibilityLabel="라포 기록 챗봇"
-      />
+    <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
+      <View style={styles.topActionRow}>
+        <Image
+          source={require('../../assets/logo.png')}
+          style={styles.topLogo}
+          resizeMode="contain"
+          accessibilityLabel="나아포"
+        />
+        <Pressable
+          onPress={onReset}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.topActionBtn,
+            pressed && styles.topActionBtnPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="새 대화 시작"
+        >
+          <Text style={styles.topActionText}>새 대화</Text>
+        </Pressable>
+      </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -542,10 +554,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerStretch: {
-    alignSelf: 'stretch',
+  topActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: H_PAD,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
-  headerAction: {
+  topLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  topActionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  topActionBtnPressed: {
+    opacity: 0.7,
+    backgroundColor: 'rgba(74, 144, 217, 0.08)',
+  },
+  topActionText: {
     fontSize: 15,
     fontWeight: '600',
     color: Colors.primary,

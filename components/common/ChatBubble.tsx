@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Image,
   StyleProp,
   StyleSheet,
   Text,
@@ -23,12 +24,12 @@ export type ChatBubbleProps = {
 };
 
 const RAPO = {
-  face: '🌀',
+  image: require('../../assets/images/rapo.png'),
   name: '라포',
 } as const;
 
 const APO = {
-  face: '🐬',
+  image: require('../../assets/images/apo.png'),
   name: '아포',
 } as const;
 
@@ -60,11 +61,15 @@ export function ChatBubble({
       style={[styles.row, isBot ? styles.rowRapo : styles.rowUser, style]}
     >
       {isBot && !hideBotAvatar && (
-        <View style={styles.rapoAvatar} accessibilityElementsHidden importantForAccessibility="no">
-          <Text style={styles.rapoAvatarEmoji}>{botMeta.face}</Text>
-        </View>
+        <Image
+          source={botMeta.image}
+          style={styles.botAvatar}
+          resizeMode="contain"
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
       )}
-      {isBot && hideBotAvatar && <View style={styles.rapoAvatarSpacer} />}
+      {isBot && hideBotAvatar && <View style={styles.botAvatarSpacer} />}
 
       <View
         style={[
@@ -128,22 +133,13 @@ const styles = StyleSheet.create({
   rowUser: {
     justifyContent: 'flex-end',
   },
-  rapoAvatar: {
+  botAvatar: {
     width: 40,
     height: 40,
-    borderRadius: 14,
-    backgroundColor: Colors.ocean.bubbleSoft,
-    borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 8,
     marginBottom: 22,
   },
-  rapoAvatarEmoji: {
-    fontSize: 22,
-  },
-  rapoAvatarSpacer: {
+  botAvatarSpacer: {
     width: 48,
   },
   bubbleColumn: {
