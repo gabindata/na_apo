@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Image, StyleSheet } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { Colors } from '../constants/colors';
@@ -29,8 +29,13 @@ function RootLayoutNav() {
   // 로딩 중엔 스플래시 화면 표시 → 잘못된 화면 스침 방지
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={styles.splash}>
+        <Image
+          source={require('../assets/logo.png')}
+          style={styles.splashLogo}
+          resizeMode="contain"
+        />
+        <ActivityIndicator size="large" color={Colors.primary} style={styles.splashSpinner} />
       </View>
     );
   }
@@ -52,3 +57,21 @@ export default function RootLayout() {
     </AuthProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  splash: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashLogo: {
+    width: 140,
+    height: 140,
+    borderRadius: 28,
+    marginBottom: 24,
+  },
+  splashSpinner: {
+    marginTop: 8,
+  },
+});

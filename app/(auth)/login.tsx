@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView
+  StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -10,7 +10,7 @@ import { Colors } from '../../constants/colors';
 // Supabase 에러 메시지 → 사용자 친화적 메시지로 변환
 function parseAuthError(error: unknown): string {
   if (!(error instanceof Error)) return '알 수 없는 오류가 발생했어요.';
-
+ 
   const msg = error.message.toLowerCase();
 
   if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
@@ -84,7 +84,11 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* 로고 */}
-        <Text style={styles.logo}>🌊</Text>
+        <Image
+          source={require('../../assets/logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.title}>나아포</Text>
         <Text style={styles.subtitle}>통증을 기록하고, 나아가세요</Text>
 
@@ -153,8 +157,10 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   logo: {
-    fontSize: 64,
+    width: 120,
+    height: 120,
     marginBottom: 8,
+    borderRadius: 24,
   },
   title: {
     fontSize: 36,
