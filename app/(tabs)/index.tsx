@@ -8,6 +8,7 @@ import { Card } from '../../components/common/Card';
 import { Header } from '../../components/common/Header';
 import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
 import { Colors } from '../../constants/colors';
+import { recommendMagazine } from '../../constants/magazines';
 import { fetchMonthlyRecords, fetchMonthlyStats } from '../../lib/painRecords';
 
 const H_PAD = 20;
@@ -91,6 +92,8 @@ export default function HomeScreen() {
     );
   }, [intensityColor, monthlyRecords]);
 
+  const magazine = useMemo(() => recommendMagazine(stats?.topBodyPart), [stats?.topBodyPart]);
+
   return (
     <View style={styles.screenRoot}>
       <Header
@@ -150,21 +153,25 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <OceanSectionTitle label="건강 매거진" />
-          <Card
-            variant="outlined"
-            padding="md"
-            style={styles.oceanOutlinedCard}
-            testID="home-section-magazine"
-            accessibilityLabel="건강 매거진 배너"
+          <Pressable
+            onPress={() => router.push(`/magazine/${magazine.id}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`건강 매거진: ${magazine.title}. 탭하면 읽기`}
           >
-            <View style={styles.bannerOcean}>
-              <View style={styles.bannerShine} />
-              <View style={styles.bannerRipple} />
-              <Text style={styles.bannerTitle}>오늘의 건강 이야기</Text>
-              <Text style={styles.bannerSub}>바다처럼 맑은 정보를 모아둘게요</Text>
-            </View>
-            <Text style={styles.placeholderCaption}>배너 · 추천 콘텐츠</Text>
-          </Card>
+            <Card
+              variant="outlined"
+              padding="md"
+              style={styles.oceanOutlinedCard}
+              testID="home-section-magazine"
+            >
+              <View style={styles.bannerOcean}>
+                <View style={styles.bannerShine} />
+                <View style={styles.bannerRipple} />
+                <Text style={styles.bannerTitle}>{magazine.title}</Text>
+                <Text style={styles.bannerSub}>{magazine.subtitle}</Text>
+              </View>
+            </Card>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
