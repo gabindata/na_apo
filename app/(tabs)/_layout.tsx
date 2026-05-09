@@ -1,9 +1,10 @@
 import { Tabs } from 'expo-router';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Colors } from '../../constants/colors';
 
 const APO_IMG = require('../../assets/images/apo.png');
 const RAPO_IMG = require('../../assets/images/rapo.png');
+const HOME_IMG = require('../../assets/home_icon.png');
 
 // 활성 탭의 아이콘에 둥근 배경 하이라이트 적용
 function TabIconWrapper({
@@ -17,14 +18,6 @@ function TabIconWrapper({
     <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
       {children}
     </View>
-  );
-}
-
-function TabEmoji({ emoji, focused }: { emoji: string; focused: boolean }) {
-  return (
-    <TabIconWrapper focused={focused}>
-      <Text style={{ fontSize: 26 }}>{emoji}</Text>
-    </TabIconWrapper>
   );
 }
 
@@ -83,7 +76,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: '홈',
-          tabBarIcon: ({ focused }) => <TabEmoji emoji="🏠" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabImage source={HOME_IMG} focused={focused} />,
         }}
       />
       {/* 오른쪽: 라포 (해마) */}

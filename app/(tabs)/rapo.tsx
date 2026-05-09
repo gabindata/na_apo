@@ -322,15 +322,29 @@ export default function RapoScreen() {
 
       if (insertError) throw insertError;
 
-      // 코인 지급은 기록 저장과 분리 — 실패해도 기록 자체는 성공으로 처리
+      // 코인 지급 — 일일 최대 10개 제한 (오늘 첫 번째 기록 저장 시에만 지급)
       let coinGranted = false;
       try {
-        const { error: rpcError } = await supabase.rpc('increment_user_coins', {
-          p_user_id: user.id,
-          p_amount: 10,
-        });
-        coinGranted = !rpcError;
-        if (rpcError) console.warn('[Rapo] 코인 지급 실패:', rpcError.message);
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        const { count: todayCount, error: countError } = await supabase
+          .from('pain_records')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .gte('recorded_at', todayStart.toISOString());
+
+        // 방금 저장한 기록 포함해 오늘 첫 번째(count === 1)일 때만 코인 지급
+        const isFirstToday = !countError && (todayCount ?? 0) <= 1;
+
+        if (isFirstToday) {
+          const { error: rpcError } = await supabase.rpc('increment_user_coins', {
+            p_user_id: user.id,
+            p_amount: 10,
+          });
+          coinGranted = !rpcError;
+          if (rpcError) console.warn('[Rapo] 코인 지급 실패:', rpcError.message);
+        }
       } catch (rpcErr) {
         console.warn('[Rapo] 코인 RPC 호출 실패:', rpcErr);
       }

@@ -5,12 +5,13 @@ export type UserProfile = {
   nickname: string;
   coins: number;
   selectedCharacter: string;
+  ownedCharacters: string[];
 };
 
 export async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, nickname, coins, selected_character')
+    .select('id, nickname, coins, selected_character, owned_characters')
     .eq('id', userId)
     .single();
 
@@ -24,6 +25,7 @@ export async function fetchUserProfile(userId: string): Promise<UserProfile | nu
     id: data.id,
     nickname: data.nickname,
     coins: data.coins ?? 0,
-    selectedCharacter: data.selected_character ?? 'default',
+    selectedCharacter: data.selected_character ?? 'mulbeom',
+    ownedCharacters: (data.owned_characters as string[] | null) ?? ['mulbeom'],
   };
 }

@@ -5,8 +5,10 @@ import { Calendar } from 'react-native-calendars';
 import type { DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../../components/common/Card';
+import { CharacterShop } from '../../components/home/CharacterShop';
 import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
 import { Colors } from '../../constants/colors';
+import { getCharacterById } from '../../constants/characters';
 import { recommendMagazine, type MagazineBlock } from '../../constants/magazines';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchMonthlyRecords, fetchMonthlyStats } from '../../lib/painRecords';
@@ -41,6 +43,7 @@ export default function HomeScreen() {
   } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [shopVisible, setShopVisible] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -122,6 +125,11 @@ export default function HomeScreen() {
     [magazine],
   );
 
+  const activeCharacter = useMemo(
+    () => getCharacterById(profile?.selectedCharacter ?? 'mulbeom'),
+    [profile?.selectedCharacter],
+  );
+
   return (
     <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
       <ScrollView
@@ -158,11 +166,18 @@ export default function HomeScreen() {
             accessibilityLabel="프로필 및 캐릭터 영역"
           >
             <View style={styles.profileRow}>
-              <View style={styles.profileAvatar}>
-                <Text style={styles.profileAvatarEmoji} accessibilityLabel="캐릭터 자리">
-                  🐚
-                </Text>
-              </View>
+              <Pressable
+                style={({ pressed }) => [styles.profileAvatar, pressed && styles.profileAvatarPressed]}
+                onPress={() => setShopVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="캐릭터 변경"
+              >
+                <Image
+                  source={activeCharacter.image}
+                  style={styles.profileAvatarImage}
+                  resizeMode="contain"
+                />
+              </Pressable>
               <View style={styles.profileCopy}>
                 <View style={styles.profileNameRow}>
                   <Text
@@ -326,6 +341,24 @@ export default function HomeScreen() {
           <MedicineAlarmSection />
         </View>
       </ScrollView>
+
+      {user && (
+        <CharacterShop
+          visible={shopVisible}
+          onClose={() => setShopVisible(false)}
+          userId={user.id}
+          coins={profile?.coins ?? 0}
+          selectedCharacter={profile?.selectedCharacter ?? 'mulbeom'}
+          ownedCharacters={profile?.ownedCharacters ?? ['mulbeom']}
+          onUpdate={(newCoins, newSelected, newOwned) => {
+            setProfile((prev) =>
+              prev
+                ? { ...prev, coins: newCoins, selectedCharacter: newSelected, ownedCharacters: newOwned }
+                : null,
+            );
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -450,16 +483,17 @@ const styles = StyleSheet.create({
   profileAvatar: {
     width: 56,
     height: 56,
-    borderRadius: 18,
-    backgroundColor: Colors.ocean.heroWashDeep,
-    borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
-  profileAvatarEmoji: {
-    fontSize: 28,
+  profileAvatarPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.95 }],
+  },
+  profileAvatarImage: {
+    width: 56,
+    height: 56,
   },
   profileCopy: {
     flex: 1,
@@ -510,7 +544,8 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   magazineCardPressed: {
-    opacity: 0.85,
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
   },
   magazineRow: {
     flexDirection: 'row',
@@ -518,104 +553,100 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   magazineThumbWrap: {
-    width: 84,
-    height: 84,
+    width: 72,
+    height: 72,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: Colors.ocean.heroWash,
+    backgroundColor: Colors.ocean.bubbleSoft,
+    flexShrink: 0,
   },
   magazineThumb: {
-    width: '100%',
-    height: '100%',
+    width: 72,
+    height: 72,
   },
   magazineThumbPlaceholder: {
-    backgroundColor: Colors.ocean.heroWash,
+    backgroundColor: Colors.border,
   },
   magazineTextWrap: {
     flex: 1,
-    minWidth: 0,
   },
   magazineTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.accent,
-    letterSpacing: -0.3,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    lineHeight: 20,
     marginBottom: 4,
   },
   magazineSub: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: Colors.textLight,
-    lineHeight: 19,
-  },
-  heatmapLegend: {
     fontSize: 12,
-    fontWeight: '700',
     color: Colors.textLight,
-    marginBottom: 8,
+    lineHeight: 18,
   },
-  heatmapStrip: {
-    flexDirection: 'row',
+  reportLinkBtn: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 10,
-    overflow: 'hidden',
-    height: 12,
-    marginBottom: 12,
-  },
-  heatCell: {
-    flex: 1,
-    height: '100%',
-  },
-  calendar: {
-    borderRadius: 14,
+    backgroundColor: Colors.ocean.heroWash,
     borderWidth: 1,
     borderColor: Colors.ocean.tideBorder,
-    paddingBottom: 4,
-    backgroundColor: Colors.heatmap.none,
+  },
+  reportLinkBtnPressed: {
+    opacity: 0.7,
+  },
+  reportLinkBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
   },
+  statsGap: {
+    width: 10,
+  },
   statCard: {
     flex: 1,
-    minHeight: 92,
   },
   statCardFull: {
-    marginTop: 12,
-    minHeight: 76,
-  },
-  statsGap: {
-    width: 12,
-  },
-  reportLinkBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: Colors.ocean.heroWash,
-    borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
-    marginBottom: 10,
-    marginLeft: 'auto',
-    flexShrink: 0,
-  },
-  reportLinkBtnPressed: {
-    opacity: 0.8,
-  },
-  reportLinkBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.accent,
+    marginTop: 10,
   },
   statLabel: {
     fontSize: 12,
-    fontWeight: '600',
     color: Colors.textLight,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
+    color: Colors.accent,
+    letterSpacing: -0.5,
+  },
+  heatmapLegend: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginBottom: 8,
+  },
+  heatmapStrip: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+  },
+  heatCell: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+  },
+  calendar: {
+    borderRadius: 12,
+  },
+  headerStretch: {
+    alignSelf: 'stretch',
+  },
+  headerAction: {
+    fontSize: 15,
+    fontWeight: '600',
     color: Colors.primary,
-    letterSpacing: -0.4,
   },
 });
