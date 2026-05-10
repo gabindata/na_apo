@@ -1,93 +1,89 @@
 import { Tabs } from 'expo-router';
-import { Image, StyleSheet, View } from 'react-native';
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { Image, Platform, StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { Colors } from '../../constants/colors';
+import {
+  FLOATING_TAB_BAR_BOTTOM_MARGIN,
+  FLOATING_TAB_BAR_HEIGHT,
+  FLOATING_TAB_BAR_SIDE_INSET,
+} from '../../constants/tabBar';
 
-const APO_IMG = require('../../assets/images/apo.png');
-const RAPO_IMG = require('../../assets/images/rapo.png');
-const HOME_IMG = require('../../assets/logo/home_icon.png');
+const APO_IMG   = require('../../assets/images/apo_tab.png');
+const RAPO_IMG  = require('../../assets/images/rapo_tab.png');
+const HOME_V2   = require('../../assets/logo/naapo_logo_ver2_button.png');
 
-const GLOW_SIZE = 72;
-
-// 활성 탭의 아이콘 뒤에 은은한 하늘색 빛(라디얼 그라디언트) 표시
-function TabGlow() {
-  return (
-    <Svg
-      pointerEvents="none"
-      width={GLOW_SIZE}
-      height={GLOW_SIZE}
-      style={styles.glow}
-    >
-      <Defs>
-        <RadialGradient id="tabGlow" cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
-          <Stop offset="0%" stopColor={Colors.primary} stopOpacity={0.35} />
-          <Stop offset="45%" stopColor={Colors.secondary} stopOpacity={0.18} />
-          <Stop offset="100%" stopColor={Colors.secondary} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <Rect x={0} y={0} width={GLOW_SIZE} height={GLOW_SIZE} fill="url(#tabGlow)" />
-    </Svg>
-  );
-}
-
-function TabIconWrapper({
+// ── 탭 이미지 ───────────────────────────────────────────
+function TabImage({
+  source,
   focused,
-  children,
+  size = 30,
 }: {
+  source: ReturnType<typeof require>;
   focused: boolean;
-  children: React.ReactNode;
+  size?: number;
 }) {
   return (
-    <View style={styles.iconWrap}>
-      {focused && <TabGlow />}
-      {children}
+    <View style={[styles.iconWrap, focused && styles.activeWrap]}>
+      <Image
+        source={source}
+        resizeMode="contain"
+        style={{ width: size, height: size, opacity: focused ? 0.95 : 0.32 }}
+      />
     </View>
   );
 }
 
-function TabImage({
-  source,
-  focused,
-}: {
-  source: ReturnType<typeof require>;
-  focused: boolean;
-}) {
-  return (
-    <TabIconWrapper focused={focused}>
-      <Image
-        source={source}
-        resizeMode="contain"
-        style={{
-          width: 36,
-          height: 36,
-          opacity: focused ? 1 : 0.9,
-        }}
-      />
-    </TabIconWrapper>
-  );
-}
-
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.tabActive,
-        tabBarInactiveTintColor: Colors.tabInactive,
+        tabBarActiveTintColor: '#A8D8F0',
+        tabBarInactiveTintColor: 'rgba(164,194,219,0.32)',
         tabBarShowLabel: false,
+        tabBarBackground: () => (
+          <View style={styles.tabCard}>
+            <View style={styles.tabCardFill} />
+            <BlurView intensity={10} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={styles.tabCardStroke} />
+          </View>
+        ),
         tabBarStyle: {
-          backgroundColor: Colors.white,
-          borderTopColor: Colors.border,
-          paddingTop: 0,
+          position: 'absolute',
+          left: FLOATING_TAB_BAR_SIDE_INSET,
+          right: FLOATING_TAB_BAR_SIDE_INSET,
+          bottom: Math.max(insets.bottom, 10) + FLOATING_TAB_BAR_BOTTOM_MARGIN,
+          height: FLOATING_TAB_BAR_HEIGHT,
+          paddingHorizontal: 10,
+          borderTopWidth: 0,
+          backgroundColor: 'transparent',
+          borderRadius: 26,
+          overflow: 'hidden',
+          elevation: 0,
+          ...Platform.select({
+            ios: {
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.08,
+              shadowRadius: 14,
+            },
+            android: {
+              elevation: 4,
+            },
+          }),
         },
-        // 라벨이 없을 때 위쪽 여백을 늘려 아이콘을 시각적으로 더 아래로 배치
+        tabBarItemStyle: {
+          paddingVertical: 4,
+        },
         tabBarIconStyle: {
-          marginTop: 12,
-          marginBottom: 0,
+          marginTop: 8,
         },
         headerShown: false,
       }}
     >
-      {/* 왼쪽: 아포 (돌고래) */}
       <Tabs.Screen
         name="apo"
         options={{
@@ -95,15 +91,13 @@ export default function TabLayout() {
           tabBarIcon: ({ focused }) => <TabImage source={APO_IMG} focused={focused} />,
         }}
       />
-      {/* 가운데: 홈 */}
       <Tabs.Screen
         name="index"
         options={{
           title: '홈',
-          tabBarIcon: ({ focused }) => <TabImage source={HOME_IMG} focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabImage source={HOME_V2} focused={focused} size={36} />,
         }}
       />
-      {/* 오른쪽: 라포 (해마) */}
       <Tabs.Screen
         name="rapo"
         options={{
@@ -116,15 +110,40 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  tabCard: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 26,
+    overflow: 'hidden',
+  },
+  tabCardFill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(16,36,64,0.45)',
+  },
+  tabCardStroke: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 26,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.ocean.tideBorder,
+  },
   iconWrap: {
-    width: 56,
+    width: 52,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 14,
   },
-  glow: {
-    position: 'absolute',
-    top: (44 - GLOW_SIZE) / 2,
-    left: (56 - GLOW_SIZE) / 2,
+  activeWrap: {
+    backgroundColor: Colors.ocean.heroWash,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#A8D8F0',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.18,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
 });

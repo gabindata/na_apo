@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatBubble } from '../../components/common/ChatBubble';
 import { Colors } from '../../constants/colors';
+import { floatingTabBarOverlayClearance } from '../../constants/tabBar';
 import { sendMessage, type Message as ApiMessage } from '../../lib/claude';
 
 const H_PAD = 20;
@@ -183,7 +184,7 @@ export default function ApoScreen() {
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
-  const composerBottomPad = Math.max(insets.bottom, 10);
+  const composerBottomPad = floatingTabBarOverlayClearance(insets.bottom);
 
   return (
     <View style={[styles.screenRoot, { paddingTop: insets.top }]}>

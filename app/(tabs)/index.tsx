@@ -1,37 +1,75 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Image, Pressable, ScrollView, StyleSheet,
+  Text, TouchableOpacity, View,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import type { DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card } from '../../components/common/Card';
+import { GlassCard } from '../../components/common/GlassCard';
+import { OceanBubbles } from '../../components/ocean/OceanBubbles';
 import { CharacterShop } from '../../components/home/CharacterShop';
 import { DayPainDetailModal } from '../../components/home/DayPainDetailModal';
 import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
 import { Colors } from '../../constants/colors';
+import { floatingTabBarOverlayClearance } from '../../constants/tabBar';
 import { getCharacterById } from '../../constants/characters';
 import { recommendMagazine, type MagazineBlock } from '../../constants/magazines';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchMonthlyRecords, fetchMonthlyStats } from '../../lib/painRecords';
 import { fetchUserProfile, type UserProfile } from '../../lib/userProfile';
 
-const H_PAD = 20;
-/** 홈 히어로 설정 버튼: 가로 패딩보다 살짝 안쪽으로 붙임 */
-const SETTINGS_BTN_RIGHT = H_PAD - 13;
-const SECTION_GAP = 22;
+// ── 디자인 토큰 ──────────────────────────────────────────
+const T = {
+  text:      '#EAF4FF',
+  textMuted: '#A4C2DB',
+  primary:   '#4A90D9',
+  secondary: '#7EC8E3',
+  accent:    '#2E5FA3',
+} as const;
 
-const HEAT_PREVIEW_KEYS = ['none', 'low', 'mid', 'high', 'severe'] as const;
+const H_PAD      = 16;
+const SECTION_GAP = 20;
 
-function OceanSectionTitle({ label }: { label: string }) {
+// ── 통증 강도 → 색상 ─────────────────────────────────────
+function intensityToColor(v: number) {
+  if (v <= 0) return Colors.heatmap.none;
+  if (v <= 3) return Colors.heatmap.low;
+  if (v <= 6) return Colors.heatmap.mid;
+  if (v <= 8) return Colors.heatmap.high;
+  return Colors.heatmap.severe;
+}
+
+// ── SectionTitle ─────────────────────────────────────────
+function SectionTitle({ label, accessory, onAccessory }: {
+  label: string; accessory?: string; onAccessory?: () => void;
+}) {
   return (
     <View style={styles.sectionTitleRow}>
-      <View style={styles.sectionAccent} accessibilityElementsHidden />
-      <Text style={styles.sectionTitle}>{label}</Text>
+      <View style={styles.sectionDot} />
+      <Text style={styles.sectionLabel}>{label}</Text>
+      {accessory && (
+        <TouchableOpacity onPress={onAccessory} style={styles.sectionAccessory} activeOpacity={0.75}>
+          <LinearGradient
+            colors={['rgba(74,144,217,0.32)', 'rgba(46,95,163,0.28)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.sectionAccessoryGradient}
+          >
+            <Text style={styles.sectionAccessoryText}>{accessory}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
+const HEAT_PREVIEW_KEYS = ['none', 'low', 'mid', 'high', 'severe'] as const;
+
+// ── HomeScreen ────────────────────────────────────────────
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -41,44 +79,25 @@ export default function HomeScreen() {
   });
   const [monthlyRecords, setMonthlyRecords] = useState<{ date: string; intensity: number }[]>([]);
   const [stats, setStats] = useState<{
-    topBodyPart: string;
-    avgIntensity: number;
-    recordCount: number;
+    topBodyPart: string; avgIntensity: number; recordCount: number;
   } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [shopVisible, setShopVisible] = useState(false);
+  const [shopVisible, setShopVisible]   = useState(false);
   const [detailDateKey, setDetailDateKey] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
-
-    if (!user) {
-      setProfile(null);
-      return;
-    }
-
+    if (!user) { setProfile(null); return; }
     (async () => {
       const data = await fetchUserProfile(user.id);
       if (mounted) setProfile(data);
     })();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [user]);
-
-  const intensityColor = useCallback((intensity: number) => {
-    if (intensity <= 0) return Colors.heatmap.none;
-    if (intensity <= 3) return Colors.heatmap.low;
-    if (intensity <= 6) return Colors.heatmap.mid;
-    if (intensity <= 8) return Colors.heatmap.high;
-    return Colors.heatmap.severe;
-  }, []);
 
   useEffect(() => {
     let mounted = true;
-
     (async () => {
       setStatsLoading(true);
       try {
@@ -91,35 +110,26 @@ export default function HomeScreen() {
         setStats(monthStats);
       } catch (err) {
         console.error('[Home] 월별 통증 기록 조회 실패:', err);
-        if (mounted) {
-          setMonthlyRecords([]);
-          setStats(null);
-        }
+        if (mounted) { setMonthlyRecords([]); setStats(null); }
       } finally {
         if (mounted) setStatsLoading(false);
       }
     })();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [visibleMonth.month, visibleMonth.year]);
 
   const markedDates = useMemo(() => {
-    return monthlyRecords.reduce<Record<string, { customStyles: { container: { backgroundColor: string } } }>>(
-      (acc, item) => {
-        acc[item.date] = {
-          customStyles: {
-            container: {
-              backgroundColor: intensityColor(item.intensity),
-            },
-          },
-        };
-        return acc;
-      },
-      {},
-    );
-  }, [intensityColor, monthlyRecords]);
+    return monthlyRecords.reduce<Record<string, { customStyles: { container: object; text: object } }>>((acc, item) => {
+      const color = intensityToColor(item.intensity);
+      acc[item.date] = {
+        customStyles: {
+          container: { backgroundColor: color, borderRadius: 10 },
+          text: { color: item.intensity >= 4 ? '#fff' : '#13243C', fontWeight: '700' },
+        },
+      };
+      return acc;
+    }, {});
+  }, [monthlyRecords]);
 
   const datesWithRecords = useMemo(
     () => new Set(monthlyRecords.map((r) => r.date)),
@@ -128,248 +138,257 @@ export default function HomeScreen() {
 
   const magazine = useMemo(() => recommendMagazine(stats?.topBodyPart), [stats?.topBodyPart]);
   const magazineThumb = useMemo(
-    () =>
-      magazine.content.find(
-        (block): block is Extract<MagazineBlock, { type: 'image' }> => block.type === 'image',
-      ),
+    () => magazine.content.find(
+      (block): block is Extract<MagazineBlock, { type: 'image' }> => block.type === 'image',
+    ),
     [magazine],
   );
-
   const activeCharacter = useMemo(
     () => getCharacterById(profile?.selectedCharacter ?? 'mulbeom'),
     [profile?.selectedCharacter],
   );
 
+  // 오늘 날짜 표시
+  const todayLabel = useMemo(() => {
+    const now = new Date();
+    return `${now.getMonth() + 1}월 ${now.getDate()}일`;
+  }, []);
+
   return (
-    <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
+    <LinearGradient
+      colors={['#3A7AB0', '#1A4068', '#0F2840', '#0A1A2E']}
+      locations={[0, 0.35, 0.70, 1]}
+      style={[styles.root, { paddingTop: insets.top }]}
+    >
+      <OceanBubbles variant="home" />
+      {/* 설정 버튼 */}
       <Pressable
         style={({ pressed }) => [
-          styles.settingsTopBtn,
-          { top: insets.top + 6, right: SETTINGS_BTN_RIGHT },
-          pressed && styles.settingsTopBtnPressed,
+          styles.settingsBtn,
+          { top: insets.top + 6 },
+          pressed && { opacity: 0.7 },
         ]}
         onPress={() => router.push('/settings')}
-        accessibilityRole="button"
         accessibilityLabel="설정"
         hitSlop={12}
       >
-        <Ionicons name="settings-outline" size={26} color="rgba(255, 255, 255, 0.95)" />
+        <Ionicons name="settings-outline" size={22} color="rgba(168,216,234,0.85)" />
       </Pressable>
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+          { paddingBottom: floatingTabBarOverlayClearance(insets.bottom) },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroBleed}>
-          <View style={styles.heroBubbleL} accessibilityElementsHidden />
-          <View style={styles.heroBubbleM} accessibilityElementsHidden />
-          <View style={styles.heroBubbleS} accessibilityElementsHidden />
+        {/* ── Hero ──────────────────────────────────────── */}
+        <View style={styles.hero}>
+          <Text style={styles.heroGreeting}>
+            안녕하세요, {profile?.nickname ?? ''}님
+          </Text>
           <Image
             source={require('../../assets/logo/naapo_typo_logo_white.png')}
-            style={styles.heroBrandLogo}
+            style={styles.heroLogo}
             resizeMode="contain"
             accessibilityLabel="나아포"
           />
-          <Text style={styles.heroTagline}>
-            아포·라포와 함께, 오늘의 통증을 가볍게 기록해요
-          </Text>
-          <View style={styles.heroWave} accessibilityElementsHidden />
+          <Text style={styles.heroTagline}>오늘의 통증을 기록해보아요.</Text>
         </View>
 
-        <View style={styles.section}>
-          <OceanSectionTitle label="프로필" />
-          <Card
-            variant="elevated"
-            padding="md"
-            style={styles.oceanElevatedCard}
-            testID="home-section-profile"
-            accessibilityLabel="프로필 및 캐릭터 영역"
-          >
-            <View style={styles.profileRow}>
-              <Pressable
-                style={({ pressed }) => [styles.profileAvatar, pressed && styles.profileAvatarPressed]}
-                onPress={() => setShopVisible(true)}
-                accessibilityRole="button"
-                accessibilityLabel="캐릭터 변경"
-              >
-                <Image
-                  source={activeCharacter.image}
-                  style={styles.profileAvatarImage}
-                  resizeMode="contain"
-                />
-              </Pressable>
-              <View style={styles.profileCopy}>
-                <View style={styles.profileNameRow}>
-                  <Text
-                    style={styles.profileName}
-                    numberOfLines={1}
-                    accessibilityLabel={`닉네임 ${profile?.nickname ?? ''}`}
-                  >
-                    {profile?.nickname ?? '닉네임'}
-                  </Text>
-                  <View style={styles.coinChip} accessibilityLabel={`보유 코인 ${profile?.coins ?? 0}개`}>
-                    <Image
-                      source={require('../../assets/logo/coin.png')}
-                      style={styles.coinIconImage}
-                      resizeMode="contain"
-                      accessibilityElementsHidden
-                    />
-                    <Text style={styles.coinValue}>{profile?.coins ?? 0}</Text>
-                  </View>
-                </View>
-                <Text style={styles.placeholderText}>
-                  기록할수록 바다가 조금씩 맑아져요.
-                </Text>
-              </View>
-            </View>
-          </Card>
-        </View>
-
-        <View style={styles.section}>
-          <OceanSectionTitle label="건강 매거진" />
-          <Pressable
-            onPress={() => router.push(`/magazine/${magazine.id}`)}
-            accessibilityRole="button"
-            accessibilityLabel={`건강 매거진: ${magazine.title}. 탭하면 읽기`}
-            style={({ pressed }) => [pressed && styles.magazineCardPressed]}
-          >
-            <Card
-              variant="outlined"
-              padding="md"
-              style={styles.oceanOutlinedCard}
-              testID="home-section-magazine"
-            >
-              <View style={styles.magazineRow}>
-                <View style={styles.magazineThumbWrap}>
-                  {magazineThumb ? (
-                    <Image
-                      source={magazineThumb.source}
-                      style={styles.magazineThumb}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[styles.magazineThumb, styles.magazineThumbPlaceholder]} />
-                  )}
-                </View>
-                <View style={styles.magazineTextWrap}>
-                  <Text style={styles.magazineTitle} numberOfLines={2}>
-                    {magazine.title}
-                  </Text>
-                  <Text style={styles.magazineSub} numberOfLines={2}>
-                    {magazine.subtitle}
-                  </Text>
-                </View>
-              </View>
-            </Card>
-          </Pressable>
-        </View>
-
-        <View style={styles.section}>
-          <OceanSectionTitle label="통증 기록 캘린더" />
-          <Card
-            variant="outlined"
-            padding="md"
-            style={styles.oceanOutlinedCard}
-            testID="home-section-calendar"
-            accessibilityLabel="통증 기록 히트맵 캘린더"
-          >
-            <Text style={styles.heatmapLegend}>이번 달 강도 미리보기</Text>
-            <View style={styles.heatmapStrip}>
-              {HEAT_PREVIEW_KEYS.map((key) => (
-                <View
-                  key={key}
-                  style={[styles.heatCell, { backgroundColor: Colors.heatmap[key] }]}
-                  accessibilityElementsHidden
-                />
-              ))}
-            </View>
-            <Text style={styles.calendarHint}>색칠된 날짜를 탭하면 그날 기록을 확인할 수 있어요.</Text>
-            <Calendar
-              markingType="custom"
-              markedDates={markedDates}
-              onDayPress={(day: DateData) => {
-                if (datesWithRecords.has(day.dateString)) {
-                  setDetailDateKey(day.dateString);
-                }
-              }}
-              onMonthChange={(date: DateData) => {
-                setVisibleMonth({ year: date.year, month: date.month });
-              }}
-              theme={{
-                backgroundColor: 'transparent',
-                calendarBackground: 'transparent',
-                todayTextColor: Colors.accent,
-                selectedDayBackgroundColor: Colors.primary,
-              }}
-              style={styles.calendar}
-            />
-          </Card>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionTitleWithAction}>
-            <OceanSectionTitle label="월별 통계" />
+        {/* ── 프로필 ───────────────────────────────────── */}
+        <SectionTitle label="프로필" />
+        <GlassCard style={styles.sectionCard}>
+          <View style={styles.profileRow}>
             <Pressable
-              onPress={() => router.push('/report')}
               style={({ pressed }) => [
-                styles.reportLinkBtn,
-                pressed && styles.reportLinkBtnPressed,
+                styles.profileAvatar,
+                pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
               ]}
-              accessibilityRole="button"
-              accessibilityLabel="레포트 화면으로 이동"
+              onPress={() => setShopVisible(true)}
+              accessibilityLabel="캐릭터 변경"
             >
-              <Text style={styles.reportLinkBtnText}>레포트 보기</Text>
+              <Image
+                source={activeCharacter.image}
+                style={styles.profileAvatarImage}
+                resizeMode="contain"
+              />
             </Pressable>
-          </View>
-          <View style={styles.statsRow}>
-            <Card
-              variant="outlined"
-              padding="md"
-              style={[styles.statCard, styles.oceanStatCard]}
-              testID="home-stat-frequent"
-              accessibilityLabel="가장 자주 아팠던 부위"
-            >
-              <Text style={styles.statLabel}>가장 자주 아픈 부위</Text>
-              <Text style={styles.statValue}>
-                {statsLoading ? '—' : stats?.topBodyPart ? stats.topBodyPart : '—'}
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName} numberOfLines={1}>
+                {profile?.nickname ?? '닉네임'}
               </Text>
-            </Card>
-            <View style={styles.statsGap} />
-            <Card
-              variant="outlined"
-              padding="md"
-              style={[styles.statCard, styles.oceanStatCard]}
-              testID="home-stat-intensity"
-              accessibilityLabel="평균 통증 강도"
-            >
-              <Text style={styles.statLabel}>평균 강도</Text>
-              <Text style={styles.statValue}>
-                {statsLoading ? '— / 10' : stats ? `${stats.avgIntensity.toFixed(1)} / 10` : '— / 10'}
+              <Text style={styles.profileSub}>
+                오늘 · {todayLabel}
               </Text>
-            </Card>
+            </View>
+            <View style={styles.coinChip}>
+              <Image
+                source={require('../../assets/logo/coin.png')}
+                style={styles.coinIcon}
+                resizeMode="contain"
+              />
+              <Text style={styles.coinValue}>{profile?.coins ?? 0}</Text>
+            </View>
           </View>
-          <Card
-            variant="outlined"
-            padding="md"
-            style={[styles.statCardFull, styles.oceanStatCard]}
-            testID="home-stat-count"
-            accessibilityLabel="기록 횟수"
+
+          {/* 통증 기록 버튼 */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.recordBtn,
+              pressed && { transform: [{ scale: 0.97 }], opacity: 0.9 },
+            ]}
+            onPress={() => router.push('/(tabs)/rapo')}
+            accessibilityLabel="오늘 통증 기록하기"
           >
+            <LinearGradient
+              colors={['rgba(74,144,217,0.95)', 'rgba(46,95,163,0.95)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.recordBtnGradient}
+            >
+              <Text style={styles.recordBtnText}>오늘의 통증 기록하기</Text>
+            </LinearGradient>
+          </Pressable>
+        </GlassCard>
+
+        {/* ── 건강 매거진 ──────────────────────────────── */}
+        <SectionTitle label="건강 매거진" />
+        <Pressable
+          onPress={() => router.push(`/magazine/${magazine.id}`)}
+          style={({ pressed }) => pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] }}
+          accessibilityLabel={`건강 매거진: ${magazine.title}`}
+        >
+          <GlassCard style={styles.sectionCard}>
+            <View style={styles.magazineRow}>
+              {/* 썸네일 */}
+              <View style={styles.magazineThumbWrap}>
+                {magazineThumb ? (
+                  <Image
+                    source={magazineThumb.source}
+                    style={styles.magazineThumbImg}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <LinearGradient
+                    colors={['#4A90D9', '#1A2E4A']}
+                    style={styles.magazineThumbImg}
+                  />
+                )}
+              </View>
+              {/* 텍스트 */}
+              <View style={styles.magazineTextWrap}>
+                <Text style={styles.magazinePickLabel}>EDITOR'S PICK</Text>
+                <Text style={styles.magazineTitle} numberOfLines={2}>
+                  {magazine.title}
+                </Text>
+                <Text style={styles.magazineSub} numberOfLines={2}>
+                  {magazine.subtitle}
+                </Text>
+                <View style={styles.magazineReadRow}>
+                  <Text style={styles.magazineReadText}>읽어보기</Text>
+                  <Ionicons name="chevron-forward" size={12} color={T.secondary} />
+                </View>
+              </View>
+            </View>
+          </GlassCard>
+        </Pressable>
+
+        {/* ── 통증 기록 캘린더 ─────────────────────────── */}
+        <SectionTitle label="통증 기록 캘린더" accessory="이번 달" />
+        <GlassCard style={styles.sectionCard}>
+          <Text style={styles.heatmapLegendLabel}>이번 달 강도 미리보기</Text>
+          <View style={styles.heatmapStrip}>
+            {HEAT_PREVIEW_KEYS.map((key) => (
+              <View key={key} style={[styles.heatCell, { backgroundColor: Colors.heatmap[key] }]} />
+            ))}
+          </View>
+          <Text style={styles.calHint}>
+            색칠된 날짜를 탭하면 그날 기록을 확인할 수 있어요.
+          </Text>
+          <Calendar
+            markingType="custom"
+            markedDates={markedDates}
+            onDayPress={(day: DateData) => {
+              if (datesWithRecords.has(day.dateString)) setDetailDateKey(day.dateString);
+            }}
+            onMonthChange={(date: DateData) => {
+              setVisibleMonth({ year: date.year, month: date.month });
+            }}
+            theme={{
+              backgroundColor: 'transparent',
+              calendarBackground: 'transparent',
+              todayTextColor: '#EAF4FF',
+              todayBackgroundColor: 'rgba(74,144,217,0.38)',
+              selectedDayBackgroundColor: T.primary,
+              selectedDayTextColor: '#EAF4FF',
+              dayTextColor: 'rgba(234,244,255,0.88)',
+              textDisabledColor: 'rgba(164,194,219,0.28)',
+              monthTextColor: T.text,
+              arrowColor: T.secondary,
+              textDayFontWeight: '700',
+              textMonthFontWeight: '800',
+              textDayHeaderFontWeight: '700',
+              textDayFontSize: 13,
+              textMonthFontSize: 15,
+              textDayHeaderFontSize: 11,
+              'stylesheet.calendar.header': {
+                dayTextAtIndex0: { color: 'rgba(240,150,150,0.80)' },
+                dayTextAtIndex6: { color: 'rgba(150,200,240,0.80)' },
+              },
+            }}
+            style={styles.calendar}
+          />
+        </GlassCard>
+
+        {/* ── 월별 통계 ─────────────────────────────────── */}
+        <SectionTitle
+          label="월별 통계"
+          accessory="레포트 보기 →"
+          onAccessory={() => router.push('/report')}
+        />
+        <View style={styles.statsGrid}>
+          <GlassCard style={styles.statCard}>
+            <Text style={styles.statLabel}>평균 강도</Text>
+            <Text style={styles.statValue}>
+              {statsLoading ? '—' : stats ? stats.avgIntensity.toFixed(1) : '—'}
+              <Text style={styles.statUnit}> /10</Text>
+            </Text>
+            <View style={styles.statBar}>
+              <LinearGradient
+                colors={[T.secondary, T.primary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[
+                  styles.statBarFill,
+                  { width: `${Math.min((stats?.avgIntensity ?? 0) * 10, 100)}%` },
+                ]}
+              />
+            </View>
+          </GlassCard>
+          <GlassCard style={styles.statCard}>
             <Text style={styles.statLabel}>기록 횟수</Text>
             <Text style={styles.statValue}>
-              {statsLoading ? '—회' : stats ? `${stats.recordCount}회` : '—회'}
+              {statsLoading ? '—' : stats?.recordCount ?? '—'}
+              <Text style={styles.statUnit}> 회</Text>
             </Text>
-          </Card>
+          </GlassCard>
         </View>
+        <GlassCard style={[styles.sectionCard, { marginTop: 10 }]}>
+          <View style={styles.statFullRow}>
+            <View>
+              <Text style={styles.statLabel}>가장 자주 아픈 부위</Text>
+              <Text style={styles.statValue}>
+                {statsLoading ? '—' : stats?.topBodyPart ?? '—'}
+              </Text>
+            </View>
+          </View>
+        </GlassCard>
 
-        <View style={styles.section}>
-          <OceanSectionTitle label="약 알람" />
-          <MedicineAlarmSection />
-        </View>
+        {/* ── 약 알람 ──────────────────────────────────── */}
+        <SectionTitle label="약 알람" />
+        <MedicineAlarmSection />
       </ScrollView>
 
       <DayPainDetailModal
@@ -388,297 +407,261 @@ export default function HomeScreen() {
           ownedCharacters={profile?.ownedCharacters ?? ['mulbeom']}
           onUpdate={(newCoins, newSelected, newOwned) => {
             setProfile((prev) =>
-              prev
-                ? { ...prev, coins: newCoins, selectedCharacter: newSelected, ownedCharacters: newOwned }
-                : null,
+              prev ? { ...prev, coins: newCoins, selectedCharacter: newSelected, ownedCharacters: newOwned } : null,
             );
           }}
         />
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
+// ── 캘린더 스타일 ─────────────────────────────────────────
+// ── 화면 스타일 ───────────────────────────────────────────
 const styles = StyleSheet.create({
-  screenRoot: {
+  root: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
-  settingsTopBtn: {
+  settingsBtn: {
     position: 'absolute',
+    right: H_PAD,
     zIndex: 30,
-    padding: 8,
+    width: 38,
+    height: 38,
     borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,234,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  settingsTopBtnPressed: {
-    opacity: 0.75,
-  },
-  scroll: {
-    flex: 1,
-  },
+  scroll:  { flex: 1 },
   scrollContent: {
     paddingHorizontal: H_PAD,
-    paddingTop: 4,
+    paddingTop: 8,
   },
-  heroBleed: {
-    marginHorizontal: -H_PAD,
-    marginBottom: SECTION_GAP,
-    paddingHorizontal: H_PAD,
-    paddingTop: 22,
-    paddingBottom: 24,
-    backgroundColor: Colors.primary,
-    borderBottomLeftRadius: 26,
-    borderBottomRightRadius: 26,
-    overflow: 'hidden',
+
+  // Hero
+  hero: {
+    paddingTop: 10,
+    paddingBottom: 26,
+    paddingLeft: 4,
   },
-  heroBubbleL: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    top: -36,
-    right: -44,
+  heroGreeting: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#C8DFF0',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
   },
-  heroBubbleM: {
-    position: 'absolute',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    top: 28,
-    left: -12,
-  },
-  heroBubbleS: {
-    position: 'absolute',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(255, 255, 255, 0.32)',
-    top: 12,
-    right: 52,
-  },
-  heroBrandLogo: {
-    width: 220,
-    height: 70,
-    alignSelf: 'flex-start',
+  heroLogo: {
+    width: 150,
+    height: 48,
+    marginBottom: 6,
   },
   heroTagline: {
-    marginTop: 6,
-    fontSize: 14,
-    lineHeight: 21,
-    color: 'rgba(255, 255, 255, 0.92)',
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(210,232,248,0.88)',
   },
-  heroWave: {
-    marginTop: 16,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    alignSelf: 'flex-start',
-    width: '42%',
-  },
-  section: {
+
+  // 공통 카드 간격
+  sectionCard: {
     marginBottom: SECTION_GAP,
   },
-  sectionTitleWithAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginBottom: 14,
-  },
+
+  // SectionTitle
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+    gap: 8,
+  },
+  sectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: T.secondary,
+    shadowColor: T.secondary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+  },
+  sectionLabel: {
     flex: 1,
-    minWidth: 0,
-  },
-  sectionAccent: {
-    width: 4,
-    height: 18,
-    borderRadius: 2,
-    backgroundColor: Colors.primary,
-    marginRight: 10,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text,
+    fontSize: 13,
+    fontWeight: '800',
+    color: T.text,
     letterSpacing: -0.2,
-    flexGrow: 0,
-    flexShrink: 1,
-    minWidth: 0,
   },
-  oceanElevatedCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
+  sectionAccessory: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.40)',
   },
-  oceanOutlinedCard: {
-    borderColor: Colors.ocean.cardEdge,
-    backgroundColor: Colors.white,
+  sectionAccessoryGradient: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
   },
-  oceanStatCard: {
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.secondary,
+  sectionAccessoryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: T.secondary,
+    letterSpacing: 0.2,
   },
+
+  // 프로필
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 14,
+    gap: 12,
   },
   profileAvatar: {
-    width: 56,
-    height: 56,
+    width: 62,
+    height: 62,
+    borderRadius: 16,
+    backgroundColor: 'rgba(126,200,227,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,234,0.30)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
-  },
-  profileAvatarPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.95 }],
+    overflow: 'hidden',
   },
   profileAvatarImage: {
     width: 56,
     height: 56,
   },
-  profileCopy: {
+  profileInfo: {
     flex: 1,
   },
-  profileNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-    flexWrap: 'wrap',
-  },
   profileName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
-    color: Colors.accent,
-    letterSpacing: -0.3,
-    flexShrink: 1,
+    color: T.text,
+    letterSpacing: -0.4,
+    marginBottom: 4,
   },
   coinChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.ocean.heroWash,
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderColor: 'rgba(168,216,234,0.28)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 999,
+    alignSelf: 'center',
   },
-  coinIconImage: {
-    width: 16,
-    height: 16,
-  },
+  coinIcon: { width: 15, height: 15 },
   coinValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.accent,
-    letterSpacing: -0.2,
+    color: T.secondary,
   },
-  placeholderText: {
-    fontSize: 14,
-    color: Colors.textLight,
-    lineHeight: 21,
+  profileSub: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: T.textMuted,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginBottom: 3,
   },
-  placeholderCaption: {
-    marginTop: 10,
-    fontSize: 13,
-    color: Colors.textLight,
+
+  // 통증 기록 버튼
+  recordBtn: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#1A4FA8',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 6,
   },
-  magazineCardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.99 }],
-  },
-  magazineRow: {
+  recordBtnGradient: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.45)',
+    borderRadius: 16,
+  },
+  recordBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  recordBtnIcon: {
+    fontSize: 16,
+  },
+
+  // 매거진
+  magazineRow: {
+    flexDirection: 'row',
     gap: 14,
+    alignItems: 'center',
   },
   magazineThumbWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 12,
+    width: 86,
+    height: 86,
+    borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: Colors.ocean.bubbleSoft,
     flexShrink: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,234,0.25)',
   },
-  magazineThumb: {
-    width: 72,
-    height: 72,
-  },
-  magazineThumbPlaceholder: {
-    backgroundColor: Colors.border,
+  magazineThumbImg: {
+    width: 86,
+    height: 86,
   },
   magazineTextWrap: {
     flex: 1,
+    gap: 3,
+  },
+  magazinePickLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: T.secondary,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   magazineTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+    color: T.text,
+    letterSpacing: -0.3,
     lineHeight: 20,
-    marginBottom: 4,
   },
   magazineSub: {
     fontSize: 12,
-    color: Colors.textLight,
-    lineHeight: 18,
-  },
-  reportLinkBtn: {
-    marginLeft: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: Colors.ocean.heroWash,
-    borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
-  },
-  reportLinkBtnPressed: {
-    opacity: 0.7,
-  },
-  reportLinkBtnText: {
-    fontSize: 12,
     fontWeight: '600',
-    color: Colors.primary,
+    color: T.textMuted,
+    lineHeight: 17,
   },
-  statsRow: {
+  magazineReadRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 4,
   },
-  statsGap: {
-    width: 10,
-  },
-  statCard: {
-    flex: 1,
-  },
-  statCardFull: {
-    marginTop: 10,
-  },
-  statLabel: {
+  magazineReadText: {
     fontSize: 12,
-    color: Colors.textLight,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  heatmapLegend: {
-    fontSize: 11,
-    color: Colors.textLight,
-    marginBottom: 6,
-  },
-  calendarHint: {
-    fontSize: 11,
-    color: Colors.primary,
     fontWeight: '600',
-    marginBottom: 10,
-    lineHeight: 16,
+    color: T.secondary,
+  },
+
+  // 캘린더
+  heatmapLegendLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: T.textMuted,
+    marginBottom: 6,
   },
   heatmapStrip: {
     flexDirection: 'row',
@@ -690,13 +673,59 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 4,
   },
+  calHint: {
+    fontSize: 11,
+    color: T.secondary,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
   calendar: {
     borderRadius: 12,
   },
-  headerStretch: {
-    alignSelf: 'stretch',
+
+  // 통계
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 0,
   },
-  headerAction: {
-    padding: 6,
+  statCard: {
+    flex: 1,
+  },
+  statFullRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: T.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  statValue: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: T.text,
+    letterSpacing: -0.8,
+    lineHeight: 30,
+  },
+  statUnit: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: T.textMuted,
+  },
+  statBar: {
+    marginTop: 10,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    overflow: 'hidden',
+  },
+  statBarFill: {
+    height: '100%',
+    borderRadius: 2,
   },
 });

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatBubble } from '../../components/common/ChatBubble';
 import { IntensitySlider } from '../../components/rapo/IntensitySlider';
 import { Colors } from '../../constants/colors';
+import { floatingTabBarOverlayClearance } from '../../constants/tabBar';
 import { RAPO_UI_INTENSITY_MARKER, RAPO_UI_SAVE_MARKER } from '../../constants/prompts';
 import { sendMessage, extractPainRecord, type Message as ApiMessage } from '../../lib/claude';
 import { supabase } from '../../lib/supabase';
@@ -399,7 +400,9 @@ export default function RapoScreen() {
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
   // 키보드 켜진 상태에서의 하단 패딩
-  const composerBottomPad = isKeyboardVisible ? 10 : Math.max(insets.bottom, 10);
+  const composerBottomPad = isKeyboardVisible
+    ? 10
+    : floatingTabBarOverlayClearance(insets.bottom);
 
   return (
     <View style={[styles.screenRoot, { paddingTop: insets.top }]}>

@@ -24,12 +24,12 @@ export type ChatBubbleProps = {
 };
 
 const RAPO = {
-  image: require('../../assets/images/rapo.png'),
+  image: require('../../assets/images/rapo_tab.png'),
   name: '라포',
 } as const;
 
 const APO = {
-  image: require('../../assets/images/apo.png'),
+  image: require('../../assets/images/apo_tab.png'),
   name: '아포',
 } as const;
 

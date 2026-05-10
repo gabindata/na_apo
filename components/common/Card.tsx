@@ -24,14 +24,14 @@ type CardProps = {
 };
 
 const COLORS = {
-  surface: '#F8FCFF',
-  outline: 'rgba(46, 95, 163, 0.18)',
+  surface: 'rgba(236,248,255,0.92)',
+  outline: 'rgba(74, 144, 217, 0.18)',
   shadow: '#0B1E3A',
   pressedOverlay: 'rgba(74, 144, 217, 0.08)',
   disabledOverlay: 'rgba(26, 46, 74, 0.06)',
 } as const;
 
-const RADIUS = 16;
+const RADIUS = 20;
 
 const PADDING_PRESETS: Record<Exclude<CardPadding, number>, number> = {
   sm: 12,
@@ -118,15 +118,17 @@ const stylesByVariant = StyleSheet.create({
   },
   elevated: {
     backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.80)',
     ...Platform.select({
       ios: {
         shadowColor: COLORS.shadow,
-        shadowOpacity: 0.10,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.09,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 6 },
       },
       android: {
-        elevation: 5,
+        elevation: 6,
       },
       default: {},
     }),

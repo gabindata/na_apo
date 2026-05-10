@@ -15,8 +15,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { Card } from '../common/Card';
-import { Colors } from '../../constants/colors';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { GlassCard } from '../common/GlassCard';
 import {
   activateMedicineAlarm,
   createAlarm,
@@ -38,6 +39,14 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
+
+const T = {
+  text:      '#EAF4FF',
+  textMuted: '#A4C2DB',
+  primary:   '#4A90D9',
+  secondary: '#7EC8E3',
+  accent:    '#2E5FA3',
+};
 
 function TimerEditor({
   timer,
@@ -235,13 +244,18 @@ export function MedicineAlarmSection() {
 
   return (
     <>
-      <Card variant="outlined" padding="md" style={styles.card}>
+      <GlassCard style={styles.card}>
         <View style={styles.cardTopRow}>
-          <View>
-            <Text style={styles.cardTitle}>💊 약 알람 관리</Text>
-          </View>
-          <Pressable onPress={() => setShowModal(true)} style={styles.addBtn} accessibilityRole="button">
-            <Text style={styles.addBtnText}>+ 알람 추가</Text>
+          <Text style={styles.cardTitle}>💊 약 알람 관리</Text>
+          <Pressable onPress={() => setShowModal(true)} accessibilityRole="button">
+            <LinearGradient
+              colors={['#5A9FE9', '#2E6BBF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.addBtn}
+            >
+              <Text style={styles.addBtnText}>+ 알람 추가</Text>
+            </LinearGradient>
           </Pressable>
         </View>
 
@@ -253,7 +267,7 @@ export function MedicineAlarmSection() {
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator size="small" color={Colors.accent} />
+            <ActivityIndicator size="small" color={T.secondary} />
           </View>
         ) : alarms.length === 0 ? (
           <View style={styles.emptyBox}>
@@ -290,8 +304,15 @@ export function MedicineAlarmSection() {
                       <Text style={styles.stopBtnText}>복용 종료 · 알람 중단</Text>
                     </Pressable>
                   ) : (
-                    <Pressable onPress={() => handleRestartAlarm(alarm)} style={styles.restartBtn}>
-                      <Text style={styles.restartBtnText}>알람 다시 시작</Text>
+                    <Pressable onPress={() => handleRestartAlarm(alarm)}>
+                      <LinearGradient
+                        colors={['#5A9FE9', '#2E6BBF']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.restartBtn}
+                      >
+                        <Text style={styles.restartBtnText}>알람 다시 시작</Text>
+                      </LinearGradient>
                     </Pressable>
                   )}
                   <Pressable onPress={() => handleDeleteAlarm(alarm)} style={styles.deleteBtn}>
@@ -302,7 +323,7 @@ export function MedicineAlarmSection() {
             ))}
           </View>
         )}
-      </Card>
+      </GlassCard>
 
       <Modal
         visible={showModal}
@@ -319,7 +340,17 @@ export function MedicineAlarmSection() {
             keyboardVerticalOffset={Platform.OS === 'ios' ? 16 : 0}
             style={styles.modalKeyboardAvoid}
           >
-            <View style={styles.modalCard}>
+            <BlurView
+              intensity={40}
+              tint="dark"
+              experimentalBlurMethod="dimezisBlurView"
+              style={styles.modalCard}
+            >
+              {/* dark ocean overlay */}
+              <View style={[StyleSheet.absoluteFill, styles.modalOverlay, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }]} />
+              {/* top shine */}
+              <View style={styles.modalShine} />
+
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>약 알람 추가</Text>
                 <Pressable
@@ -347,7 +378,9 @@ export function MedicineAlarmSection() {
                   style={styles.fieldInput}
                   value={medicineName}
                   onChangeText={setMedicineName}
-                  placeholderTextColor={Colors.textLight}
+                  placeholder="예: 타이레놀"
+                  placeholderTextColor={T.textMuted}
+                  selectionColor={T.secondary}
                 />
 
                 <Text style={styles.fieldLabel}>복용 규칙</Text>
@@ -355,7 +388,9 @@ export function MedicineAlarmSection() {
                   style={styles.fieldInput}
                   value={dosageRule}
                   onChangeText={setDosageRule}
-                  placeholderTextColor={Colors.textLight}
+                  placeholder="예: 식후 30분, 1정"
+                  placeholderTextColor={T.textMuted}
+                  selectionColor={T.secondary}
                 />
 
                 <View style={styles.timerHeader}>
@@ -393,7 +428,7 @@ export function MedicineAlarmSection() {
                       display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                       onChange={handleTimerPickerChange}
                       {...(Platform.OS === 'ios'
-                        ? { textColor: Colors.text, themeVariant: 'light' as const }
+                        ? { textColor: T.text, themeVariant: 'dark' as const }
                         : {})}
                     />
                     {Platform.OS === 'ios' ? (
@@ -406,19 +441,22 @@ export function MedicineAlarmSection() {
               </ScrollView>
 
               <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-                <Pressable
-                  onPress={handleAddAlarm}
-                  disabled={saving}
-                  style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
-                >
-                  {saving ? (
-                    <ActivityIndicator size="small" color={Colors.white} />
-                  ) : (
-                    <Text style={styles.saveBtnText}>알람 저장</Text>
-                  )}
+                <Pressable onPress={handleAddAlarm} disabled={saving}>
+                  <LinearGradient
+                    colors={saving ? ['#2A4A70', '#1A3050'] : ['#4F96DF', '#2D6BBF', '#1A4FA8']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.saveBtn}
+                  >
+                    {saving ? (
+                      <ActivityIndicator size="small" color={T.text} />
+                    ) : (
+                      <Text style={styles.saveBtnText}>알람 저장</Text>
+                    )}
+                  </LinearGradient>
                 </Pressable>
               </View>
-            </View>
+            </BlurView>
           </KeyboardAvoidingView>
         </View>
       </Modal>
@@ -428,29 +466,20 @@ export function MedicineAlarmSection() {
 
 const styles = StyleSheet.create({
   card: {
-    borderColor: Colors.ocean.cardEdge,
-    backgroundColor: Colors.white,
+    // GlassCard handles the visual; no extra overrides needed
   },
   cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 10,
   },
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text,
-  },
-  cardSub: {
-    marginTop: 4,
-    fontSize: 12,
-    color: Colors.textLight,
-    lineHeight: 18,
-    maxWidth: 210,
+    color: T.text,
   },
   addBtn: {
-    backgroundColor: Colors.primary,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -458,21 +487,21 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.white,
+    color: '#EAF4FF',
   },
   statusRow: {
-    marginTop: 12,
+    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
   },
   statusText: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: T.textMuted,
     fontWeight: '600',
   },
   statusDivider: {
     marginHorizontal: 6,
-    color: Colors.textLight,
+    color: T.textMuted,
   },
   loadingWrap: {
     marginTop: 16,
@@ -481,19 +510,22 @@ const styles = StyleSheet.create({
   },
   emptyBox: {
     marginTop: 14,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: Colors.ocean.heroWash,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(126,180,220,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,234,0.45)',
   },
   emptyText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.accent,
+    color: T.secondary,
   },
   emptySubText: {
     marginTop: 4,
     fontSize: 12,
-    color: Colors.textLight,
+    fontWeight: '600',
+    color: T.textMuted,
   },
   alarmList: {
     marginTop: 12,
@@ -501,10 +533,10 @@ const styles = StyleSheet.create({
   },
   alarmItem: {
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
+    borderColor: 'rgba(168,216,234,0.32)',
+    borderRadius: 14,
     padding: 12,
-    backgroundColor: Colors.background,
+    backgroundColor: 'rgba(126,180,220,0.14)',
   },
   alarmItemTop: {
     flexDirection: 'row',
@@ -518,12 +550,13 @@ const styles = StyleSheet.create({
   alarmName: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.text,
+    color: T.text,
   },
   alarmRule: {
     marginTop: 2,
     fontSize: 12,
-    color: Colors.textLight,
+    fontWeight: '600',
+    color: T.textMuted,
   },
   stateBadge: {
     borderRadius: 999,
@@ -532,22 +565,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   stateBadgeOn: {
-    backgroundColor: '#EAF7EE',
-    borderColor: '#B8E3C6',
+    backgroundColor: 'rgba(100,210,160,0.15)',
+    borderColor: 'rgba(100,210,160,0.40)',
   },
   stateBadgeOff: {
-    backgroundColor: '#F4F5F7',
-    borderColor: '#D6D9DD',
+    backgroundColor: 'rgba(126,180,220,0.10)',
+    borderColor: 'rgba(168,216,234,0.25)',
   },
   stateBadgeText: {
     fontSize: 11,
     fontWeight: '700',
   },
   stateBadgeTextOn: {
-    color: '#2D7A4F',
+    color: '#7EDCB0',
   },
   stateBadgeTextOff: {
-    color: '#6A7380',
+    color: T.textMuted,
   },
   timerChipRow: {
     marginTop: 10,
@@ -557,15 +590,15 @@ const styles = StyleSheet.create({
   },
   timerChip: {
     borderRadius: 999,
-    backgroundColor: Colors.ocean.heroWash,
+    backgroundColor: 'rgba(74,144,217,0.20)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+    borderColor: 'rgba(126,200,227,0.40)',
   },
   timerChipText: {
     fontSize: 12,
-    color: Colors.accent,
+    color: T.secondary,
     fontWeight: '700',
   },
   alarmActionRow: {
@@ -576,62 +609,79 @@ const styles = StyleSheet.create({
   stopBtn: {
     flex: 1,
     borderRadius: 10,
-    backgroundColor: '#FDECEC',
+    backgroundColor: 'rgba(220,80,80,0.15)',
     borderWidth: 1,
-    borderColor: '#F2B9B9',
+    borderColor: 'rgba(220,120,120,0.35)',
     paddingVertical: 9,
     alignItems: 'center',
   },
   stopBtnText: {
     fontSize: 12,
-    color: '#A33A3A',
+    color: '#F0AAAA',
     fontWeight: '700',
   },
   restartBtn: {
     flex: 1,
     borderRadius: 10,
-    backgroundColor: Colors.primary,
     paddingVertical: 9,
     alignItems: 'center',
+    paddingHorizontal: 12,
   },
   restartBtnText: {
     fontSize: 12,
-    color: Colors.white,
+    color: '#EAF4FF',
     fontWeight: '700',
   },
   deleteBtn: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(168,216,234,0.28)',
     paddingHorizontal: 12,
     paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(126,180,220,0.08)',
   },
   deleteBtnText: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: T.textMuted,
     fontWeight: '700',
   },
+  // ── Modal ──────────────────────────────────────────────
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 26, 43, 0.35)',
+    backgroundColor: 'rgba(3,12,18,0.75)',
     justifyContent: 'flex-end',
   },
   modalKeyboardAvoid: {
     width: '100%',
   },
   modalCard: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: '90%',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(168,216,234,0.30)',
+  },
+  modalOverlay: {
+    backgroundColor: 'rgba(8,26,48,0.82)',
+  },
+  modalShine: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(168,216,234,0.50)',
+    zIndex: 1,
   },
   modalHeader: {
     paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: 'rgba(168,216,234,0.22)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -639,12 +689,12 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: Colors.text,
+    color: T.text,
   },
   modalClose: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.primary,
+    color: T.secondary,
   },
   modalScroll: {
     maxHeight: '100%',
@@ -655,27 +705,26 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: 'rgba(168,216,234,0.22)',
     paddingHorizontal: 18,
-    paddingTop: 10,
-    backgroundColor: Colors.white,
+    paddingTop: 12,
   },
   fieldLabel: {
-    marginTop: 12,
+    marginTop: 14,
     marginBottom: 6,
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textLight,
+    color: T.textMuted,
   },
   fieldInput: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(168,216,234,0.48)',
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     fontSize: 14,
-    color: Colors.text,
-    backgroundColor: Colors.background,
+    color: T.text,
+    backgroundColor: 'rgba(126,180,220,0.20)',
   },
   timerHeader: {
     marginTop: 8,
@@ -685,21 +734,22 @@ const styles = StyleSheet.create({
   },
   timerAddBtn: {
     borderRadius: 10,
-    backgroundColor: Colors.ocean.heroWash,
+    backgroundColor: 'rgba(74,144,217,0.18)',
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+    borderColor: 'rgba(126,200,227,0.35)',
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
   timerAddBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.accent,
+    color: T.secondary,
   },
   timerGuide: {
     marginTop: 6,
     fontSize: 12,
-    color: Colors.textLight,
+    fontWeight: '600',
+    color: T.textMuted,
   },
   timerEditorList: {
     marginTop: 10,
@@ -710,42 +760,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(168,216,234,0.45)',
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    backgroundColor: Colors.background,
+    backgroundColor: 'rgba(126,180,220,0.18)',
   },
   timerIcon: {
     fontSize: 15,
   },
   timePickBtn: {
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+    borderColor: 'rgba(126,200,227,0.40)',
     borderRadius: 12,
     minWidth: 92,
     minHeight: 46,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(74,144,217,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   timePickText: {
-    color: Colors.accent,
+    color: T.secondary,
     fontSize: 16,
     fontWeight: '700',
   },
   timerHint: {
     marginLeft: 4,
     fontSize: 12,
-    color: Colors.textLight,
+    fontWeight: '600',
+    color: T.textMuted,
     flex: 1,
   },
   timerRemoveBtn: {
     borderWidth: 1,
-    borderColor: '#E7C9C9',
-    backgroundColor: '#FFF5F5',
+    borderColor: 'rgba(220,120,120,0.35)',
+    backgroundColor: 'rgba(220,80,80,0.12)',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -753,14 +804,14 @@ const styles = StyleSheet.create({
   timerRemoveText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#A33A3A',
+    color: '#F0AAAA',
   },
   pickerWrap: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(168,216,234,0.25)',
     borderRadius: 12,
-    backgroundColor: Colors.background,
+    backgroundColor: 'rgba(126,180,220,0.10)',
     padding: 8,
   },
   pickerDoneBtn: {
@@ -769,28 +820,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    backgroundColor: Colors.ocean.heroWash,
+    backgroundColor: 'rgba(74,144,217,0.20)',
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+    borderColor: 'rgba(126,200,227,0.40)',
   },
   pickerDoneText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.accent,
+    color: T.secondary,
   },
   saveBtn: {
     borderRadius: 14,
-    backgroundColor: Colors.accent,
-    paddingVertical: 13,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  saveBtnDisabled: {
-    opacity: 0.6,
   },
   saveBtnText: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.white,
+    color: '#EAF4FF',
   },
 });
