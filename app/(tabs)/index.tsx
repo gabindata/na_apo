@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import type { DateData } from 'react-native-calendars';
@@ -15,6 +16,8 @@ import { fetchMonthlyRecords, fetchMonthlyStats } from '../../lib/painRecords';
 import { fetchUserProfile, type UserProfile } from '../../lib/userProfile';
 
 const H_PAD = 20;
+/** 홈 히어로 설정 버튼: 가로 패딩보다 살짝 안쪽으로 붙임 */
+const SETTINGS_BTN_RIGHT = H_PAD - 13;
 const SECTION_GAP = 22;
 
 const HEAT_PREVIEW_KEYS = ['none', 'low', 'mid', 'high', 'severe'] as const;
@@ -132,6 +135,20 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.settingsTopBtn,
+          { top: insets.top + 6, right: SETTINGS_BTN_RIGHT },
+          pressed && styles.settingsTopBtnPressed,
+        ]}
+        onPress={() => router.push('/settings')}
+        accessibilityRole="button"
+        accessibilityLabel="설정"
+        hitSlop={12}
+      >
+        <Ionicons name="settings-outline" size={26} color="rgba(255, 255, 255, 0.95)" />
+      </Pressable>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -367,6 +384,15 @@ const styles = StyleSheet.create({
   screenRoot: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  settingsTopBtn: {
+    position: 'absolute',
+    zIndex: 30,
+    padding: 8,
+    borderRadius: 12,
+  },
+  settingsTopBtnPressed: {
+    opacity: 0.75,
   },
   scroll: {
     flex: 1,
@@ -618,25 +644,24 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.accent,
-    letterSpacing: -0.5,
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.text,
   },
   heatmapLegend: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textLight,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   heatmapStrip: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 12,
+    gap: 4,
+    marginBottom: 8,
   },
   heatCell: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 4,
   },
   calendar: {
     borderRadius: 12,
@@ -645,8 +670,6 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   headerAction: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.primary,
+    padding: 6,
   },
 });
