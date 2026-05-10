@@ -4,7 +4,7 @@ import { Colors } from '../../constants/colors';
 
 const APO_IMG = require('../../assets/images/apo.png');
 const RAPO_IMG = require('../../assets/images/rapo.png');
-const HOME_IMG = require('../../assets/home_icon.png');
+const HOME_IMG = require('../../assets/logo/home_icon.png');
 
 // 활성 탭의 아이콘에 둥근 배경 하이라이트 적용
 function TabIconWrapper({

@@ -37,7 +37,7 @@ function RootLayoutNav() {
     return (
       <View style={styles.splash}>
         <Image
-          source={require('../assets/logo.png')}
+          source={require('../assets/logo/logo.png')}
           style={styles.splashLogo}
           resizeMode="contain"
         />

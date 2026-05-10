@@ -145,7 +145,7 @@ export default function HomeScreen() {
           <View style={styles.heroBubbleM} accessibilityElementsHidden />
           <View style={styles.heroBubbleS} accessibilityElementsHidden />
           <Image
-            source={require('../../assets/naapo_typo_logo_white.png')}
+            source={require('../../assets/logo/naapo_typo_logo_white.png')}
             style={styles.heroBrandLogo}
             resizeMode="contain"
             accessibilityLabel="나아포"
@@ -189,7 +189,7 @@ export default function HomeScreen() {
                   </Text>
                   <View style={styles.coinChip} accessibilityLabel={`보유 코인 ${profile?.coins ?? 0}개`}>
                     <Image
-                      source={require('../../assets/coin.png')}
+                      source={require('../../assets/logo/coin.png')}
                       style={styles.coinIconImage}
                       resizeMode="contain"
                       accessibilityElementsHidden

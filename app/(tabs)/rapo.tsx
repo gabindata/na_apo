@@ -405,7 +405,7 @@ export default function RapoScreen() {
     <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
       <View style={styles.topActionRow}>
         <Image
-          source={require('../../assets/logo.png')}
+          source={require('../../assets/logo/logo.png')}
           style={styles.topLogo}
           resizeMode="contain"
           accessibilityLabel="나아포"

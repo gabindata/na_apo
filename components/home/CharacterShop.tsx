@@ -15,7 +15,7 @@ import { CHARACTERS } from '../../constants/characters';
 import { purchaseCharacter, selectCharacter } from '../../lib/characters';
 import { Colors } from '../../constants/colors';
 
-const COIN_IMG = require('../../assets/coin.png');
+const COIN_IMG = require('../../assets/logo/coin.png');
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_PAD = 16;
