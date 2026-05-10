@@ -40,7 +40,7 @@ const WELCOME_MESSAGES: ChatMessage[] = [
   {
     id: 'welcome-1',
     role: 'assistant',
-    text: '안녕하세요, 저는 아포예요. 🐬\n건강 관련 궁금한 점이나 걱정되는 증상이 있으면 편하게 말씀해 주세요.',
+    text: '안녕하세요, 저는 아포예요.\n건강 관련 궁금한 점이나 걱정되는 증상이 있으면 편하게 말씀해 주세요.',
   },
 ];
 
@@ -222,14 +222,14 @@ export default function ApoScreen() {
             accessibilityRole="button"
             accessibilityLabel={guideExpanded ? '가이드라인 접기' : '가이드라인 펼치기'}
           >
-            <Text style={styles.guideHeaderText}>💬 아포에게 물어보세요</Text>
+            <Text style={styles.guideHeaderText}>아포에게 물어보세요</Text>
             <Text style={styles.guideToggle}>{guideExpanded ? '접기 ▲' : '펼치기 ▼'}</Text>
           </Pressable>
           {guideExpanded && (
             <View style={styles.guideContent}>
               <Text style={styles.guideItem}>건강 고민이나 증상에 대해 편하게 물어보세요.</Text>
-              <Text style={styles.guideItem}>💊 의학적 진단·처방은 제공하지 않아요.</Text>
-              <Text style={styles.guideItem}>🚨 응급 증상이라면 즉시 병원 방문을 권해요.</Text>
+              <Text style={styles.guideItem}>의학적 진단·처방은 제공하지 않아요.</Text>
+              <Text style={styles.guideItem}>응급 증상이라면 즉시 병원 방문을 권해요.</Text>
             </View>
           )}
         </View>

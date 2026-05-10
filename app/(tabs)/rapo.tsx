@@ -96,7 +96,7 @@ const WELCOME_MESSAGES: ChatMessage[] = [
   {
     id: 'welcome-1',
     role: 'assistant',
-    text: '안녕하세요, 저는 라포예요. 🌊\n오늘 있었던 일이나 몸 상태를 편하게 적어주세요. 나중에 아포와 연결할 기록 챗봇이에요.',
+    text: '안녕하세요, 저는 라포예요.\n오늘 있었던 일이나 몸 상태를 편하게 적어주세요. 나중에 아포와 연결할 기록 챗봇이에요.',
   },
 ];
 
@@ -358,8 +358,8 @@ export default function RapoScreen() {
           id: createId(),
           role: 'assistant',
           text: coinGranted
-            ? '기록이 저장됐어요! 🌊 오늘도 잘 기록해줘서 고마워요. 코인 10개를 드렸어요.'
-            : '기록이 저장됐어요! 🌊 오늘도 잘 기록해줘서 고마워요.',
+            ? '기록이 저장됐어요! 오늘도 잘 기록해줘서 고마워요. 코인 10개를 드렸어요.'
+            : '기록이 저장됐어요! 오늘도 잘 기록해줘서 고마워요.',
         },
       ]);
     } catch (err) {
@@ -371,7 +371,7 @@ export default function RapoScreen() {
         {
           id: createId(),
           role: 'assistant',
-          text: '저장 중에 문제가 생겼어요. 다시 시도해줘요. 😢',
+          text: '저장 중에 문제가 생겼어요. 다시 시도해줘요.',
         },
       ]);
     } finally {
@@ -469,7 +469,7 @@ export default function RapoScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="오늘 기록 저장하기"
                 >
-                  <Text style={styles.saveBtnText}>💾  오늘 기록 저장하기</Text>
+                  <Text style={styles.saveBtnText}>오늘 기록 저장하기</Text>
                 </Pressable>
               </View>
             ) : null
@@ -526,7 +526,7 @@ export default function RapoScreen() {
               accessibilityRole="button"
               accessibilityLabel="새로운 기록 시작하기"
             >
-              <Text style={styles.newChatBtnText}>🌊  새로운 기록 시작하기</Text>
+              <Text style={styles.newChatBtnText}>새로운 기록 시작하기</Text>
             </Pressable>
           ) : (
             <View style={styles.composerInner}>

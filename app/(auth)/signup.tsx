@@ -85,7 +85,7 @@ export default function SignupScreen() {
         // Confirm email OFF → 세션이 즉시 생성됨
         // AuthContext가 세션을 감지하여 자동으로 (tabs)로 리디렉트하므로
         // 수동 네비게이션 없이 환영 메시지만 표시
-        Alert.alert('가입 완료 🌊', '나아포에 오신 걸 환영해요!');
+        Alert.alert('가입 완료', '나아포에 오신 걸 환영해요!');
       } else {
         // Confirm email ON → 이메일 인증 필요
         Alert.alert(
