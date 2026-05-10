@@ -13,29 +13,31 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ChatBubble } from '../../components/common/ChatBubble';
-import { Colors } from '../../constants/colors';
+import { OceanBubbles } from '../../components/ocean/OceanBubbles';
 import { floatingTabBarOverlayClearance } from '../../constants/tabBar';
 import { sendMessage, type Message as ApiMessage } from '../../lib/claude';
 
-const H_PAD = 20;
+const H_PAD = 18;
 const COMPOSER_MIN_HEIGHT = 44;
 const INPUT_MAX_LINES = 5;
 const CHAT_EDGE_VERTICAL_PAD = 4;
 
-type ChatRole = 'user' | 'assistant';
+const T = {
+  text:      '#EAF4FF',
+  textMuted: '#A4C2DB',
+  secondary: '#7EC8E3',
+  primary:   '#4A90D9',
+} as const;
 
-type ChatMessage = {
-  id: string;
-  role: ChatRole;
-  text: string;
-};
+type ChatRole = 'user' | 'assistant';
+type ChatMessage = { id: string; role: ChatRole; text: string };
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-// UI 전용 웰컴 메시지 — API 히스토리에는 포함하지 않음
 const WELCOME_MESSAGES: ChatMessage[] = [
   {
     id: 'welcome-1',
@@ -44,8 +46,7 @@ const WELCOME_MESSAGES: ChatMessage[] = [
   },
 ];
 
-const USER_FRIENDLY_ERROR =
-  '지금 응답이 원활하지 않아요. 잠시 후 다시 시도해주세요.';
+const USER_FRIENDLY_ERROR = '지금 응답이 원활하지 않아요. 잠시 후 다시 시도해주세요.';
 
 export default function ApoScreen() {
   const insets = useSafeAreaInsets();
@@ -57,41 +58,28 @@ export default function ApoScreen() {
   const [composerHeight, setComposerHeight] = useState(0);
   const [guideExpanded, setGuideExpanded] = useState(true);
 
-  // 최신 UI 메시지 참조
-  const messagesRef = useRef<ChatMessage[]>([...WELCOME_MESSAGES]);
-
-  // Claude에 보내는 실제 대화 히스토리
-  const apiHistory = useRef<ApiMessage[]>([]);
-
-  // 진행 중 요청 무효화용
+  const messagesRef  = useRef<ChatMessage[]>([...WELCOME_MESSAGES]);
+  const apiHistory   = useRef<ApiMessage[]>([]);
   const requestIdRef = useRef(0);
 
   const canSend = draft.trim().length > 0 && !isLoading;
 
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const scrollToEnd = useCallback(() => {
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToEnd({ animated: true });
-    });
+    requestAnimationFrame(() => { listRef.current?.scrollToEnd({ animated: true }); });
   }, []);
 
+  useEffect(() => { scrollToEnd(); }, [messages.length, isLoading, scrollToEnd]);
   useEffect(() => {
-    scrollToEnd();
-  }, [messages.length, isLoading, scrollToEnd]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => scrollToEnd(), 50);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => scrollToEnd(), 50);
+    return () => clearTimeout(t);
   }, [composerHeight, scrollToEnd]);
 
   const onComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
 
-  // composer는 FlatList 아래 쌓이는 구조(오버랩 없음) — paddingBottom은 미적 여백만 필요
   const listBottomPadding = CHAT_EDGE_VERTICAL_PAD;
 
   const appendUiMessage = useCallback((message: ChatMessage) => {
@@ -106,12 +94,7 @@ export default function ApoScreen() {
     const text = draft.trim();
     if (!text || isLoading) return;
 
-    const userMsg: ChatMessage = {
-      id: createId(),
-      role: 'user',
-      text,
-    };
-
+    const userMsg: ChatMessage = { id: createId(), role: 'user', text };
     const nextUiMessages = [...messagesRef.current, userMsg];
     messagesRef.current = nextUiMessages;
     setMessages(nextUiMessages);
@@ -122,39 +105,22 @@ export default function ApoScreen() {
       ...apiHistory.current,
       { role: 'user', content: text },
     ];
-
     const currentRequestId = ++requestIdRef.current;
 
     try {
       const reply = await sendMessage(nextApiHistory, 'apo');
-
       if (currentRequestId !== requestIdRef.current) return;
 
-      const assistantMsg: ChatMessage = {
-        id: createId(),
-        role: 'assistant',
-        text: reply,
-      };
-
+      const assistantMsg: ChatMessage = { id: createId(), role: 'assistant', text: reply };
       appendUiMessage(assistantMsg);
       apiHistory.current = [...nextApiHistory, { role: 'assistant', content: reply }];
     } catch (err) {
       if (currentRequestId !== requestIdRef.current) return;
-
       console.error('[Apo] Claude API error:', err);
-
-      appendUiMessage({
-        id: createId(),
-        role: 'assistant',
-        text: USER_FRIENDLY_ERROR,
-      });
-
-      // 실패해도 유저 메시지는 유지
+      appendUiMessage({ id: createId(), role: 'assistant', text: USER_FRIENDLY_ERROR });
       apiHistory.current = nextApiHistory;
     } finally {
-      if (currentRequestId === requestIdRef.current) {
-        setIsLoading(false);
-      }
+      if (currentRequestId === requestIdRef.current) setIsLoading(false);
     }
   }, [appendUiMessage, draft, isLoading]);
 
@@ -169,10 +135,9 @@ export default function ApoScreen() {
 
   const renderItem = useCallback(
     ({ item, index }: { item: ChatMessage; index: number }) => {
-      const isApo = item.role === 'assistant';
+      const isApo    = item.role === 'assistant';
       const prevItem = index > 0 ? messages[index - 1] : null;
       const hideAvatar = isApo && prevItem?.role === 'assistant';
-
       return (
         <ChatBubble role={isApo ? 'apo' : 'user'} hideBotAvatar={hideAvatar}>
           {item.text}
@@ -183,14 +148,20 @@ export default function ApoScreen() {
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
-
   const composerBottomPad = floatingTabBarOverlayClearance(insets.bottom);
 
   return (
-    <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
-      <View style={styles.topActionRow}>
+    <LinearGradient
+      colors={['#3A7AB0', '#1A4068', '#0F2840', '#0A1A2E']}
+      locations={[0, 0.35, 0.70, 1]}
+      style={[styles.root, { paddingTop: insets.top }]}
+    >
+      <OceanBubbles variant="home" />
+
+      {/* 상단 바 */}
+      <View style={styles.topBar}>
         <Image
-          source={require('../../assets/logo/logo.png')}
+          source={require('../../assets/logo/icon.png')}
           style={styles.topLogo}
           resizeMode="contain"
           accessibilityLabel="나아포"
@@ -198,14 +169,17 @@ export default function ApoScreen() {
         <Pressable
           onPress={onReset}
           hitSlop={8}
-          style={({ pressed }) => [
-            styles.topActionBtn,
-            pressed && styles.topActionBtnPressed,
-          ]}
           accessibilityRole="button"
           accessibilityLabel="새 대화 시작"
         >
-          <Text style={styles.topActionText}>새 대화</Text>
+          <LinearGradient
+            colors={['rgba(74,144,217,0.30)', 'rgba(46,95,163,0.28)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.resetBtn}
+          >
+            <Text style={styles.resetBtnText}>새 대화</Text>
+          </LinearGradient>
         </Pressable>
       </View>
 
@@ -214,26 +188,29 @@ export default function ApoScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
-        {/* 접을 수 있는 가이드라인 */}
-        <View style={styles.guideBlock}>
-          <Pressable
-            onPress={() => setGuideExpanded((v) => !v)}
-            style={styles.guideHeader}
-            accessibilityRole="button"
-            accessibilityLabel={guideExpanded ? '가이드라인 접기' : '가이드라인 펼치기'}
-          >
-            <Text style={styles.guideHeaderText}>아포에게 물어보세요</Text>
-            <Text style={styles.guideToggle}>{guideExpanded ? '접기 ▲' : '펼치기 ▼'}</Text>
-          </Pressable>
-          {guideExpanded && (
-            <View style={styles.guideContent}>
-              <Text style={styles.guideItem}>건강 고민이나 증상에 대해 편하게 물어보세요.</Text>
-              <Text style={styles.guideItem}>의학적 진단·처방은 제공하지 않아요.</Text>
-              <Text style={styles.guideItem}>응급 증상이라면 즉시 병원 방문을 권해요.</Text>
+        {/* 가이드 블록 */}
+        <Pressable
+          onPress={() => setGuideExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={guideExpanded ? '가이드라인 접기' : '가이드라인 펼치기'}
+        >
+          <View style={styles.guideBlock}>
+            <View style={styles.guideShine} />
+            <View style={styles.guideHeader}>
+              <Text style={styles.guideHeaderText}>아포에게 물어보세요</Text>
+              <Text style={styles.guideToggle}>{guideExpanded ? '접기 ▲' : '펼치기 ▼'}</Text>
             </View>
-          )}
-        </View>
+            {guideExpanded && (
+              <View style={styles.guideContent}>
+                <Text style={styles.guideItem}>건강 고민이나 증상에 대해 편하게 물어보세요.</Text>
+                <Text style={styles.guideItem}>의학적 진단·처방은 제공하지 않아요.</Text>
+                <Text style={styles.guideItem}>응급 증상이라면 즉시 병원 방문을 권해요.</Text>
+              </View>
+            )}
+          </View>
+        </Pressable>
 
+        {/* 채팅 목록 */}
         <FlatList
           ref={listRef}
           data={messages}
@@ -251,176 +228,196 @@ export default function ApoScreen() {
           ListFooterComponent={
             isLoading ? (
               <ChatBubble role="apo">
-                <ActivityIndicator size="small" color={Colors.accent} />
+                <ActivityIndicator size="small" color={T.secondary} />
               </ChatBubble>
             ) : null
           }
         />
 
-        <View
-          style={[
-            styles.composerOuter,
-            {
-              paddingBottom: composerBottomPad,
-              borderTopColor: Colors.ocean.tideBorder,
-            },
-          ]}
-          onLayout={onComposerLayout}
-        >
-          <View style={styles.composerInner}>
+        {/* 입력창 */}
+        <View style={styles.composerOuter} onLayout={onComposerLayout}>
+          <View style={styles.composerShine} />
+          <View style={[styles.composerInner, { paddingBottom: composerBottomPad }]}>
             <TextInput
               style={styles.input}
               value={draft}
               onChangeText={setDraft}
               placeholder="건강 고민을 편하게 적어보세요…"
-              placeholderTextColor={Colors.textLight}
+              placeholderTextColor="rgba(164,194,219,0.55)"
               multiline
               maxLength={4000}
               textAlignVertical="top"
               accessibilityLabel="메시지 입력"
               blurOnSubmit={false}
+              selectionColor={T.secondary}
             />
             <Pressable
               onPress={onSend}
               disabled={!canSend}
-              style={({ pressed }) => [
-                styles.sendBtn,
-                !canSend && styles.sendBtnDisabled,
-                pressed && canSend && styles.sendBtnPressed,
-              ]}
+              style={({ pressed }) => [pressed && canSend && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
               accessibilityRole="button"
               accessibilityLabel="보내기"
               accessibilityState={{ disabled: !canSend }}
             >
-              <Text style={[styles.sendBtnText, !canSend && styles.sendBtnTextDisabled]}>
-                보내기
-              </Text>
+              <LinearGradient
+                colors={canSend ? ['#5A9FE9', '#2E6BBF', '#1A4FA8'] : ['rgba(80,100,130,0.4)', 'rgba(60,80,110,0.4)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.sendBtn}
+              >
+                <Text style={[styles.sendBtnText, !canSend && styles.sendBtnTextDisabled]}>
+                  보내기
+                </Text>
+              </LinearGradient>
             </Pressable>
           </View>
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  screenRoot: {
+  root: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
-  topActionRow: {
+  flex: {
+    flex: 1,
+  },
+
+  // 상단 바
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: H_PAD,
     paddingTop: 8,
-    paddingBottom: 4,
+    paddingBottom: 6,
   },
   topLogo: {
     width: 36,
     height: 36,
-    borderRadius: 8,
-  },
-  topActionBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
     borderRadius: 10,
   },
-  topActionBtnPressed: {
-    opacity: 0.7,
-    backgroundColor: 'rgba(74, 144, 217, 0.08)',
+  resetBtn: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.35)',
   },
-  topActionText: {
-    fontSize: 15,
+  resetBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: T.secondary,
+  },
+
+  // 가이드 블록
+  guideBlock: {
+    marginHorizontal: H_PAD,
+    marginBottom: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,234,0.28)',
+    backgroundColor: 'rgba(120,175,220,0.13)',
+    overflow: 'hidden',
+  },
+  guideShine: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  guideHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  guideHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: T.text,
+  },
+  guideToggle: {
+    fontSize: 11,
     fontWeight: '600',
-    color: Colors.primary,
+    color: T.textMuted,
   },
-  flex: {
-    flex: 1,
+  guideContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    gap: 5,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(168,216,234,0.20)',
+    paddingTop: 8,
   },
+  guideItem: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: T.textMuted,
+    lineHeight: 20,
+  },
+
+  // 채팅 목록
   listContent: {
     flexGrow: 1,
     justifyContent: 'flex-end',
     paddingHorizontal: H_PAD,
     paddingTop: 10,
   },
-  guideBlock: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.ocean.tideBorder,
-    backgroundColor: Colors.background,
-  },
-  guideHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: H_PAD,
-    paddingVertical: 10,
-  },
-  guideHeaderText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  guideToggle: {
-    fontSize: 11,
-    color: Colors.textLight,
-  },
-  guideContent: {
-    paddingHorizontal: H_PAD,
-    paddingBottom: 10,
-    gap: 4,
-  },
-  guideItem: {
-    fontSize: 13,
-    color: Colors.textLight,
-    lineHeight: 20,
-  },
+
+  // 입력창
   composerOuter: {
-    backgroundColor: Colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: H_PAD,
+    borderTopColor: 'rgba(168,216,234,0.18)',
+    backgroundColor: 'rgba(8,18,38,0.55)',
     paddingTop: 10,
+    paddingHorizontal: H_PAD,
+    overflow: 'hidden',
+  },
+  composerShine: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   composerInner: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
+    paddingBottom: 12,
   },
   input: {
     flex: 1,
     minHeight: COMPOSER_MIN_HEIGHT,
     maxHeight: 22 * INPUT_MAX_LINES + 24,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.ocean.cardEdge,
-    backgroundColor: Colors.white,
+    borderColor: 'rgba(168,216,234,0.28)',
+    backgroundColor: 'rgba(120,175,220,0.14)',
     fontSize: 15,
     lineHeight: 22,
-    color: Colors.text,
+    color: T.text,
   },
   sendBtn: {
     minHeight: COMPOSER_MIN_HEIGHT,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     borderRadius: 16,
-    backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sendBtnPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
-  },
-  sendBtnDisabled: {
-    backgroundColor: Colors.border,
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.30)',
   },
   sendBtnText: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.white,
+    color: '#EAF4FF',
   },
   sendBtnTextDisabled: {
-    color: Colors.textLight,
+    color: 'rgba(164,194,219,0.45)',
   },
 });

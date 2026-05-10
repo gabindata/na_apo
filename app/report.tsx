@@ -12,12 +12,19 @@ import { useFont } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
 import { Bar, CartesianChart, Line, Scatter } from 'victory-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../components/common/Header';
-import { Colors } from '../constants/colors';
 import { fetchRecentRecords, type PainRecord } from '../lib/painRecords';
 import { sendMessage } from '../lib/claude';
 
-const AXIS_GRID_COLOR = Colors.border;
+const T = {
+  text:      '#0C2A45',
+  textMuted: '#4A7898',
+  secondary: '#1A6FAD',
+  primary:   '#2468B8',
+} as const;
+
+const AXIS_GRID_COLOR = 'rgba(100,160,210,0.30)';
 const AXIS_TICK_WIDTH = 1;
 /** Skia 축 숫자·날짜 라벨 (font 없으면 victory-native가 텍스트를 그리지 않음) */
 const CHART_AXIS_FONT_SRC = require('../assets/fonts/SeoulNamsan/SeoulNamsanM.ttf');
@@ -493,7 +500,7 @@ export default function ReportScreen() {
           <View style={styles.aiBody}>
             {isLoading ? (
               <View style={styles.aiLoadingBox}>
-                <ActivityIndicator size="small" color={Colors.primary} />
+                <ActivityIndicator size="small" color={T.secondary} />
                 <Text style={styles.aiLoadingText}>AI가 분석 중이에요…</Text>
               </View>
             ) : error ? (
@@ -529,12 +536,16 @@ export default function ReportScreen() {
   );
 
   return (
-    <View style={[styles.screenRoot, { paddingBottom: insets.bottom }]}>
+    <LinearGradient
+      colors={['#F2F9FF', '#D0E9F8', '#A8D4EE']}
+      locations={[0, 0.5, 1]}
+      style={[styles.screenRoot, { paddingBottom: insets.bottom }]}
+    >
       <Header
         title="레포트"
         leftIcon={<Text style={styles.backIcon}>‹</Text>}
         onPressLeft={() => router.back()}
-        style={styles.headerStretch}
+        style={styles.headerDark}
       />
 
       <ScrollView
@@ -551,7 +562,11 @@ export default function ReportScreen() {
                 <Pressable
                   key={option.key}
                   onPress={() => setPeriod(option.key)}
-                  style={[styles.periodBtn, selected && styles.periodBtnActive]}
+                  style={({ pressed }) => [
+                    styles.periodBtn,
+                    selected && styles.periodBtnActive,
+                    pressed && { opacity: 0.82 },
+                  ]}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   accessibilityLabel={`${option.label} 레포트 보기`}
@@ -590,13 +605,13 @@ export default function ReportScreen() {
           ) : null}
           {loading ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={T.secondary} />
             </View>
           ) : barData.length === 0 ? (
             <Text style={styles.emptyText}>표시할 기록이 없어요.</Text>
           ) : !chartsReady ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={T.secondary} />
             </View>
           ) : (
             <>
@@ -650,14 +665,14 @@ export default function ReportScreen() {
                       padding={{ left: 38, right: 36, top: 8, bottom: 24 }}
                       domain={{ y: [0, 10] }}
                       frame={{
-                        lineColor: Colors.ocean.tideBorder,
+                        lineColor: AXIS_GRID_COLOR,
                         lineWidth: AXIS_TICK_WIDTH,
                       }}
                       xAxis={{
                         axisSide: 'bottom',
                         font: chartAxisFont ?? undefined,
                         formatXLabel: (label: string | number) => chartAxisLabelText(label),
-                        labelColor: Colors.text,
+                        labelColor: T.textMuted,
                         lineColor: AXIS_GRID_COLOR,
                         lineWidth: AXIS_TICK_WIDTH,
                         labelOffset: 6,
@@ -677,7 +692,7 @@ export default function ReportScreen() {
                             if (!Number.isFinite(n)) return '';
                             return Number.isInteger(n) ? String(n) : n.toFixed(1);
                           },
-                          labelColor: Colors.text,
+                          labelColor: T.textMuted,
                           lineColor: AXIS_GRID_COLOR,
                           lineWidth: AXIS_TICK_WIDTH,
                           labelOffset: 6,
@@ -689,11 +704,11 @@ export default function ReportScreen() {
                         <>
                           <Line
                             points={points.y}
-                            color={Colors.accent}
+                            color={T.secondary}
                             strokeWidth={2.5}
                             curveType="linear"
                           />
-                          <Scatter points={points.y} radius={6} color={Colors.primary} />
+                          <Scatter points={points.y} radius={6} color={T.primary} />
                         </>
                       )}
                     </CartesianChart>
@@ -730,13 +745,13 @@ export default function ReportScreen() {
           ) : null}
           {loading ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={T.secondary} />
             </View>
           ) : barData.length === 0 ? (
             <Text style={styles.emptyText}>표시할 기록이 없어요.</Text>
           ) : !chartsReady ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={T.secondary} />
             </View>
           ) : (
             <View style={[styles.chartCenterRow, styles.chartPlotCardInset]}>
@@ -748,7 +763,7 @@ export default function ReportScreen() {
                   padding={{ left: 44, right: 44, top: 8, bottom: 46 }}
                   domain={{ y: [0, barYMax] }}
                   frame={{
-                    lineColor: Colors.ocean.tideBorder,
+                    lineColor: AXIS_GRID_COLOR,
                     lineWidth: AXIS_TICK_WIDTH,
                   }}
                   xAxis={{
@@ -759,7 +774,7 @@ export default function ReportScreen() {
                       if (!raw) return '';
                       return raw.length > 8 ? `${raw.slice(0, 7)}…` : raw;
                     },
-                    labelColor: Colors.text,
+                    labelColor: T.textMuted,
                     lineColor: AXIS_GRID_COLOR,
                     lineWidth: AXIS_TICK_WIDTH,
                     labelOffset: 6,
@@ -772,7 +787,7 @@ export default function ReportScreen() {
                       domain: [0, barYMax],
                       tickValues: barYTickValues,
                       formatYLabel: (v: number) => `${Math.round(Number(v))}회`,
-                      labelColor: Colors.text,
+                      labelColor: T.textMuted,
                       lineColor: AXIS_GRID_COLOR,
                       lineWidth: AXIS_TICK_WIDTH,
                       labelOffset: 6,
@@ -786,7 +801,7 @@ export default function ReportScreen() {
                       chartBounds={chartBounds}
                       barCount={barData.length}
                       innerPadding={barInnerGap}
-                      color={Colors.secondary}
+                      color={T.primary}
                     />
                   )}
                 </CartesianChart>
@@ -819,13 +834,13 @@ export default function ReportScreen() {
           ) : null}
           {loading ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={T.secondary} />
             </View>
           ) : emotionLineData.length === 0 ? (
             <Text style={styles.emptyText}>표시할 감정 기록이 없어요.</Text>
           ) : !chartsReady ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={T.secondary} />
             </View>
           ) : (
             <>
@@ -838,14 +853,14 @@ export default function ReportScreen() {
                     padding={{ left: 46, right: 36, top: 12, bottom: 24 }}
                     domain={{ y: [1, 3] }}
                     frame={{
-                      lineColor: Colors.ocean.tideBorder,
+                      lineColor: AXIS_GRID_COLOR,
                       lineWidth: AXIS_TICK_WIDTH,
                     }}
                     xAxis={{
                       axisSide: 'bottom',
                       font: chartAxisFont ?? undefined,
                       formatXLabel: (label: string | number) => chartAxisLabelText(label),
-                      labelColor: Colors.text,
+                      labelColor: T.textMuted,
                       lineColor: AXIS_GRID_COLOR,
                       lineWidth: AXIS_TICK_WIDTH,
                       labelOffset: 6,
@@ -858,7 +873,7 @@ export default function ReportScreen() {
                         domain: [1, 3],
                         tickValues: [1, 2, 3],
                         formatYLabel: (v: number) => emotionYAxisLabel(v),
-                        labelColor: Colors.text,
+                        labelColor: T.textMuted,
                         lineColor: AXIS_GRID_COLOR,
                         lineWidth: AXIS_TICK_WIDTH,
                         labelOffset: 6,
@@ -870,11 +885,11 @@ export default function ReportScreen() {
                       <>
                         <Line
                           points={points.y}
-                          color={Colors.accent}
+                          color={T.secondary}
                           strokeWidth={2.5}
                           curveType="linear"
                         />
-                        <Scatter points={points.y} radius={6} color={Colors.primary} />
+                        <Scatter points={points.y} radius={6} color={T.primary} />
                       </>
                     )}
                   </CartesianChart>
@@ -891,21 +906,21 @@ export default function ReportScreen() {
           {!loading && emotionPayload ? renderAiCard('emotion') : null}
         </View>
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screenRoot: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
-  headerStretch: {
-    alignSelf: 'stretch',
+  headerDark: {
+    backgroundColor: 'rgba(242,249,255,0.94)',
+    borderBottomColor: 'rgba(100,160,210,0.30)',
   },
   backIcon: {
     fontSize: 28,
-    color: Colors.primary,
+    color: T.secondary,
     fontWeight: '500',
     lineHeight: 28,
     paddingHorizontal: 8,
@@ -920,10 +935,10 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   section: {
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255,255,255,0.62)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.ocean.cardEdge,
+    borderColor: 'rgba(100,160,210,0.28)',
     padding: 16,
   },
   /** 차트 라벨이 카드 모서리에 잘리지 않도록 */
@@ -942,7 +957,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text,
+    color: T.text,
     marginBottom: 10,
   },
   chartHeaderRow: {
@@ -961,18 +976,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
-    backgroundColor: Colors.ocean.heroWash,
+    backgroundColor: 'rgba(36,104,184,0.10)',
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+    borderColor: 'rgba(100,160,210,0.35)',
     flexShrink: 0,
   },
   hintToggleBtnPressed: {
-    opacity: 0.85,
+    opacity: 0.82,
   },
   hintToggleText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.primary,
+    color: T.secondary,
   },
   sectionTitleSpacing: {
     marginBottom: 12,
@@ -1001,12 +1016,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.white,
+    borderColor: 'rgba(100,160,210,0.30)',
+    backgroundColor: 'rgba(255,255,255,0.50)',
   },
   intensityPartTabActive: {
-    borderColor: Colors.primary,
-    backgroundColor: 'rgba(74, 144, 217, 0.12)',
+    borderColor: T.secondary,
+    backgroundColor: 'rgba(36,104,184,0.14)',
   },
   intensityPartTabPressed: {
     opacity: 0.82,
@@ -1014,10 +1029,10 @@ const styles = StyleSheet.create({
   intensityPartTabText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textLight,
+    color: T.textMuted,
   },
   intensityPartTabTextActive: {
-    color: Colors.accent,
+    color: T.text,
   },
   periodRow: {
     flexDirection: 'row',
@@ -1026,23 +1041,23 @@ const styles = StyleSheet.create({
   periodBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(100,160,210,0.30)',
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255,255,255,0.50)',
   },
   periodBtnActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: 'rgba(36,104,184,0.18)',
+    borderColor: T.secondary,
   },
   periodBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textLight,
+    color: T.textMuted,
   },
   periodBtnTextActive: {
-    color: Colors.white,
+    color: T.text,
   },
   loadingBox: {
     minHeight: 120,
@@ -1051,12 +1066,12 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    color: Colors.textLight,
+    color: T.textMuted,
     paddingVertical: 16,
   },
   chartHint: {
     fontSize: 11,
-    color: Colors.textLight,
+    color: T.textMuted,
     lineHeight: 16,
     marginBottom: 12,
   },
@@ -1064,22 +1079,22 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
-    backgroundColor: Colors.ocean.heroWash,
+    borderColor: 'rgba(100,160,210,0.28)',
+    backgroundColor: 'rgba(255,255,255,0.55)',
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   emotionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text,
+    color: T.text,
   },
   aiCard: {
     marginTop: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
-    backgroundColor: Colors.ocean.heroWash,
+    borderColor: 'rgba(100,160,210,0.28)',
+    backgroundColor: 'rgba(255,255,255,0.55)',
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
@@ -1088,17 +1103,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(36,104,184,0.12)',
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+    borderColor: 'rgba(100,160,210,0.35)',
   },
   aiToggleBtnPressed: {
-    opacity: 0.85,
+    opacity: 0.82,
   },
   aiToggleText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.primary,
+    color: T.secondary,
   },
   aiBody: {
     marginTop: 10,
@@ -1111,16 +1126,16 @@ const styles = StyleSheet.create({
   },
   aiLoadingText: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: T.textMuted,
   },
   aiText: {
     fontSize: 13,
     lineHeight: 20,
-    color: Colors.text,
+    color: T.text,
   },
   aiErrorText: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: T.textMuted,
     marginBottom: 8,
     lineHeight: 18,
   },
@@ -1129,16 +1144,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(36,104,184,0.12)',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(100,160,210,0.35)',
   },
   aiRetryBtnPressed: {
-    opacity: 0.85,
+    opacity: 0.82,
   },
   aiRetryText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.primary,
+    color: T.secondary,
   },
 });

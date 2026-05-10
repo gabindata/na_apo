@@ -7,16 +7,14 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export type ChatBubbleRole = 'rapo' | 'apo' | 'user';
 
 export type ChatBubbleProps = {
   role: ChatBubbleRole;
   children: React.ReactNode;
-  /** 하단 메타 (예: 오전 10:24) */
   timeLabel?: string;
-  /** 봇 말풍선: 아바타 숨김 (연속 메시지 등) */
   hideBotAvatar?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
@@ -33,6 +31,12 @@ const APO = {
   name: '아포',
 } as const;
 
+const T = {
+  text:      '#EAF4FF',
+  textMuted: '#A4C2DB',
+  secondary: '#7EC8E3',
+};
+
 export function ChatBubble({
   role,
   children,
@@ -42,24 +46,22 @@ export function ChatBubble({
   testID,
   accessibilityLabel,
 }: ChatBubbleProps) {
-  const isBot = role === 'rapo' || role === 'apo';
-  const isRapo = role === 'rapo';
+  const isBot  = role === 'rapo' || role === 'apo';
   const botMeta = role === 'apo' ? APO : RAPO;
 
   const defaultA11y =
     typeof children === 'string'
       ? `${isBot ? botMeta.name : '나'}: ${children}`
-      : isBot
-        ? `${botMeta.name} 메시지`
-        : '내 메시지';
+      : isBot ? `${botMeta.name} 메시지` : '내 메시지';
 
   return (
     <View
       testID={testID}
       accessibilityRole="text"
       accessibilityLabel={accessibilityLabel ?? defaultA11y}
-      style={[styles.row, isBot ? styles.rowRapo : styles.rowUser, style]}
+      style={[styles.row, isBot ? styles.rowBot : styles.rowUser, style]}
     >
+      {/* 봇 아바타 */}
       {isBot && !hideBotAvatar && (
         <Image
           source={botMeta.image}
@@ -71,43 +73,47 @@ export function ChatBubble({
       )}
       {isBot && hideBotAvatar && <View style={styles.botAvatarSpacer} />}
 
-      <View
-        style={[
-          styles.bubbleColumn,
-          isBot ? styles.bubbleColumnRapo : styles.bubbleColumnUser,
-        ]}
-      >
+      <View style={[styles.bubbleColumn, isBot ? styles.bubbleColumnBot : styles.bubbleColumnUser]}>
+        {/* 봇 이름 */}
         {isBot && (
           <Text
-            style={styles.rapoName}
+            style={styles.botName}
             accessibilityElementsHidden
             importantForAccessibility="no"
           >
             {botMeta.name}
           </Text>
         )}
-        <View
-          style={[
-            styles.bubble,
-            isBot ? styles.bubbleRapo : styles.bubbleUser,
-          ]}
-        >
-          {typeof children === 'string' ? (
-            <Text
-              style={[styles.messageText, isBot ? styles.textRapo : styles.textUser]}
-            >
-              {children}
-            </Text>
-          ) : (
-            <View>{children}</View>
-          )}
-        </View>
-        {timeLabel ? (
-          <Text
-            style={[styles.time, isBot ? styles.timeRapo : styles.timeUser]}
-            accessibilityElementsHidden
-            importantForAccessibility="no"
+
+        {/* 말풍선 */}
+        {isBot ? (
+          // 봇: 글래스 버블
+          <View style={styles.bubbleBot}>
+            <View style={styles.bubbleBotShine} />
+            {typeof children === 'string' ? (
+              <Text style={styles.textBot}>{children}</Text>
+            ) : (
+              <View>{children}</View>
+            )}
+          </View>
+        ) : (
+          // 유저: 그라디언트 버블
+          <LinearGradient
+            colors={['#5A9FE9', '#2E6BBF', '#1E4FA0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.bubbleUser}
           >
+            {typeof children === 'string' ? (
+              <Text style={styles.textUser}>{children}</Text>
+            ) : (
+              <View>{children}</View>
+            )}
+          </LinearGradient>
+        )}
+
+        {timeLabel ? (
+          <Text style={[styles.time, isBot ? styles.timeBot : styles.timeUser]}>
             {timeLabel}
           </Text>
         ) : null}
@@ -117,104 +123,102 @@ export function ChatBubble({
 }
 
 const BUBBLE_R = 20;
-/** 말풍선 꼬리 느낌: 한 모서리만 살짝 덜 둥글게 */
-const TAIL = 6;
+const TAIL     = 6;
 
 const styles = StyleSheet.create({
   row: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'flex-end',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  rowRapo: {
+  rowBot: {
     justifyContent: 'flex-start',
   },
   rowUser: {
     justifyContent: 'flex-end',
   },
   botAvatar: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     marginRight: 8,
-    marginBottom: 22,
+    marginBottom: 20,
+    borderRadius: 10,
   },
   botAvatarSpacer: {
-    width: 48,
+    width: 44,
   },
   bubbleColumn: {
     maxWidth: '78%',
   },
-  bubbleColumnRapo: {
+  bubbleColumnBot: {
     alignItems: 'flex-start',
   },
   bubbleColumnUser: {
     alignItems: 'flex-end',
   },
-  rapoName: {
-    fontSize: 12,
+  botName: {
+    fontSize: 11,
     fontWeight: '700',
-    color: Colors.primary,
+    color: T.secondary,
     marginBottom: 4,
     marginLeft: 4,
-    letterSpacing: -0.2,
+    letterSpacing: 0.2,
   },
-  bubble: {
+  // 봇 버블 — 글래스
+  bubbleBot: {
     paddingVertical: 12,
     paddingHorizontal: 14,
+    borderRadius: BUBBLE_R,
+    borderTopLeftRadius: TAIL,
     borderWidth: 1,
+    borderColor: 'rgba(168,216,234,0.28)',
+    backgroundColor: 'rgba(120,175,220,0.18)',
+    overflow: 'hidden',
   },
-  bubbleRapo: {
-    backgroundColor: Colors.white,
-    borderColor: Colors.ocean.cardEdge,
-    borderTopLeftRadius: BUBBLE_R,
-    borderTopRightRadius: BUBBLE_R,
-    borderBottomRightRadius: BUBBLE_R,
-    borderBottomLeftRadius: TAIL,
-    shadowColor: Colors.accent,
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+  bubbleBotShine: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.32)',
   },
+  // 유저 버블 — 그라디언트
   bubbleUser: {
-    backgroundColor: Colors.primary,
-    borderColor: 'rgba(46, 95, 163, 0.22)',
-    borderTopLeftRadius: BUBBLE_R,
-    borderTopRightRadius: BUBBLE_R,
-    borderBottomLeftRadius: BUBBLE_R,
-    borderBottomRightRadius: TAIL,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: BUBBLE_R,
+    borderTopRightRadius: TAIL,
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.30)',
   },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 24,
-    letterSpacing: -0.2,
-  },
-  textRapo: {
-    color: Colors.text,
+  textBot: {
+    fontSize: 15,
+    lineHeight: 23,
+    color: T.text,
     fontWeight: '500',
+    letterSpacing: -0.1,
   },
   textUser: {
-    color: Colors.white,
+    fontSize: 15,
+    lineHeight: 23,
+    color: '#EAF4FF',
     fontWeight: '600',
+    letterSpacing: -0.1,
   },
   time: {
     marginTop: 4,
     fontSize: 11,
     fontWeight: '500',
   },
-  timeRapo: {
-    color: Colors.textLight,
+  timeBot: {
+    color: T.textMuted,
     marginLeft: 4,
     alignSelf: 'flex-start',
   },
   timeUser: {
-    color: Colors.textLight,
+    color: T.textMuted,
     marginRight: 4,
     alignSelf: 'flex-end',
   },
