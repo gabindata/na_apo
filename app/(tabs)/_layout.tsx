@@ -1,12 +1,35 @@
 import { Tabs } from 'expo-router';
 import { Image, StyleSheet, View } from 'react-native';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Colors } from '../../constants/colors';
 
 const APO_IMG = require('../../assets/images/apo.png');
 const RAPO_IMG = require('../../assets/images/rapo.png');
 const HOME_IMG = require('../../assets/logo/home_icon.png');
 
-// 활성 탭의 아이콘에 둥근 배경 하이라이트 적용
+const GLOW_SIZE = 72;
+
+// 활성 탭의 아이콘 뒤에 은은한 하늘색 빛(라디얼 그라디언트) 표시
+function TabGlow() {
+  return (
+    <Svg
+      pointerEvents="none"
+      width={GLOW_SIZE}
+      height={GLOW_SIZE}
+      style={styles.glow}
+    >
+      <Defs>
+        <RadialGradient id="tabGlow" cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
+          <Stop offset="0%" stopColor={Colors.primary} stopOpacity={0.35} />
+          <Stop offset="45%" stopColor={Colors.secondary} stopOpacity={0.18} />
+          <Stop offset="100%" stopColor={Colors.secondary} stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Rect x={0} y={0} width={GLOW_SIZE} height={GLOW_SIZE} fill="url(#tabGlow)" />
+    </Svg>
+  );
+}
+
 function TabIconWrapper({
   focused,
   children,
@@ -15,7 +38,8 @@ function TabIconWrapper({
   children: React.ReactNode;
 }) {
   return (
-    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+    <View style={styles.iconWrap}>
+      {focused && <TabGlow />}
       {children}
     </View>
   );
@@ -97,12 +121,10 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 22,
-    backgroundColor: 'transparent',
   },
-  iconWrapActive: {
-    backgroundColor: Colors.ocean.bubbleSoft,
-    borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+  glow: {
+    position: 'absolute',
+    top: (44 - GLOW_SIZE) / 2,
+    left: (56 - GLOW_SIZE) / 2,
   },
 });
