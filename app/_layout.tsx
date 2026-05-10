@@ -3,6 +3,7 @@ import { ActivityIndicator, View, Image, StyleSheet } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { BgmProvider } from '../contexts/BgmContext';
 import { Colors } from '../constants/colors';
 import { FONT_ASSETS, applyGlobalFont } from '../lib/fonts';
 
@@ -60,7 +61,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <BgmProvider>
+        <RootLayoutNav />
+      </BgmProvider>
     </AuthProvider>
   );
 }

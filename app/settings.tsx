@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../components/common/Header';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../contexts/AuthContext';
+import { useBgm } from '../contexts/BgmContext';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
+  const { prefsLoaded, enabled, setEnabled, volume, setVolume } = useBgm();
   const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = () => {
@@ -39,6 +42,42 @@ export default function SettingsScreen() {
       />
 
       <View style={styles.body}>
+        <Text style={styles.sectionHeading}>앱 설정</Text>
+        <View style={[styles.section, styles.sectionMarginBottom]}>
+          <View style={styles.bgmRow}>
+            <View style={styles.bgmLabels}>
+              <Text style={styles.bgmTitle}>배경음악</Text>
+            </View>
+            <Switch
+              value={prefsLoaded && enabled}
+              onValueChange={setEnabled}
+              disabled={!prefsLoaded}
+              trackColor={{ false: Colors.border, true: Colors.secondary }}
+              thumbColor={Colors.white}
+              accessibilityLabel="배경음악 켜기"
+            />
+          </View>
+          {prefsLoaded && enabled ? (
+            <View style={styles.volumeBlock}>
+              <View style={styles.volumeLabelRow}>
+                <Text style={styles.volumeLabel}>음량</Text>
+                <Text style={styles.volumeValue}>{Math.round(volume * 100)}%</Text>
+              </View>
+              <Slider
+                style={styles.slider}
+                minimumValue={0}
+                maximumValue={1}
+                value={volume}
+                onValueChange={setVolume}
+                minimumTrackTintColor={Colors.primary}
+                maximumTrackTintColor={Colors.border}
+                thumbTintColor={Colors.primary}
+                accessibilityLabel="배경음악 음량"
+              />
+            </View>
+          ) : null}
+        </View>
+
         <View style={styles.section}>
           <Pressable
             style={({ pressed }) => [
@@ -80,12 +119,68 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
   },
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textLight,
+    marginBottom: 10,
+    marginLeft: 2,
+    letterSpacing: -0.2,
+  },
   section: {
     backgroundColor: Colors.white,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.ocean.tideBorder,
     overflow: 'hidden',
+  },
+  sectionMarginBottom: {
+    marginBottom: 16,
+  },
+  bgmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    gap: 12,
+  },
+  bgmLabels: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 4,
+  },
+  bgmTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  volumeBlock: {
+    paddingHorizontal: 18,
+    paddingBottom: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.ocean.tideBorder,
+  },
+  volumeLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  volumeLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  volumeValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
   },
   logoutRow: {
     paddingVertical: 16,
