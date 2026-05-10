@@ -459,6 +459,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
+    marginBottom: 14,
   },
   sectionTitleRow: {
     flexDirection: 'row',

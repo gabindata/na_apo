@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../components/common/Header';
 import { Colors } from '../constants/colors';
 import { fetchRecentRecords, type PainRecord } from '../lib/painRecords';
+import { sendMessage } from '../lib/claude';
 
 const AXIS_GRID_COLOR = Colors.border;
 const AXIS_TICK_WIDTH = 1;
@@ -36,6 +37,40 @@ const EMOTION_CHART_HEIGHT_RATIO = 0.62;
 const INTENSITY_PART_LINE_COUNT = 5;
 
 type PeriodKey = '7' | '30' | '90';
+
+/** 차트별 AI/안내 토글 키 */
+type ChartHintKey = 'intensity' | 'barFreq' | 'emotion';
+
+type AiBoolPanels = Record<ChartHintKey, boolean>;
+type AiTextPanels = Record<ChartHintKey, string | null>;
+
+const INITIAL_AI_OPEN: AiBoolPanels = {
+  intensity: false,
+  barFreq: false,
+  emotion: false,
+};
+
+const INITIAL_AI_TEXT: AiTextPanels = {
+  intensity: null,
+  barFreq: null,
+  emotion: null,
+};
+
+function initialAiOpenByPeriod(): Record<PeriodKey, AiBoolPanels> {
+  return {
+    '7': { ...INITIAL_AI_OPEN },
+    '30': { ...INITIAL_AI_OPEN },
+    '90': { ...INITIAL_AI_OPEN },
+  };
+}
+
+function initialAiTextByPeriod(): Record<PeriodKey, AiTextPanels> {
+  return {
+    '7': { ...INITIAL_AI_TEXT },
+    '30': { ...INITIAL_AI_TEXT },
+    '90': { ...INITIAL_AI_TEXT },
+  };
+}
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string; days: number }[] = [
   { key: '7', label: '1주', days: 7 },
@@ -173,6 +208,34 @@ export default function ReportScreen() {
 
   const [intensityPartTabIdx, setIntensityPartTabIdx] = useState(0);
 
+  /** 차트별 안내 문구 접기/펼치기 */
+  const [chartHintOpen, setChartHintOpen] = useState<Record<ChartHintKey, boolean>>({
+    intensity: false,
+    barFreq: false,
+    emotion: false,
+  });
+  const toggleChartHint = (key: ChartHintKey) => {
+    setChartHintOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  /** 차트별 AI 분석 — 기간(1주/1달/3달) 탭마다 열림·결과 상태 분리 */
+  const [aiOpenByPeriod, setAiOpenByPeriod] = useState<Record<PeriodKey, AiBoolPanels>>(() =>
+    initialAiOpenByPeriod(),
+  );
+  const [aiLoadingByPeriod, setAiLoadingByPeriod] = useState<Record<PeriodKey, AiBoolPanels>>(() => ({
+    '7': { ...INITIAL_AI_OPEN },
+    '30': { ...INITIAL_AI_OPEN },
+    '90': { ...INITIAL_AI_OPEN },
+  }));
+  const [aiResultByPeriod, setAiResultByPeriod] = useState<Record<PeriodKey, AiTextPanels>>(() =>
+    initialAiTextByPeriod(),
+  );
+  const [aiErrorByPeriod, setAiErrorByPeriod] = useState<Record<PeriodKey, AiTextPanels>>(() =>
+    initialAiTextByPeriod(),
+  );
+  /** key: `${chart}:${JSON.stringify(payload)}` — 동일 입력 재호출 방지 */
+  const aiCacheRef = useRef<Map<string, string>>(new Map());
+
   const intensityPartTabSig = useMemo(() => barData.map((d) => d.x).join('|'), [barData]);
 
   useEffect(() => {
@@ -257,7 +320,202 @@ export default function ReportScreen() {
     });
   }, [records]);
 
+  /** 차트별 AI 분석 입력 페이로드 — 데이터가 비어 있으면 null (호출 자체를 막음) */
+  const intensityPayload = useMemo(() => {
+    if (!selectedIntensityPartLabel || intensityLineForSelectedPart.length === 0) return null;
+    return {
+      chart: 'intensity_trend_by_part' as const,
+      period_days: selectedDays,
+      body_part: selectedIntensityPartLabel,
+      daily: intensityLineForSelectedPart.map((d) => ({ date: d.x, intensity: d.y })),
+    };
+  }, [selectedIntensityPartLabel, intensityLineForSelectedPart, selectedDays]);
+
+  const barFreqPayload = useMemo(() => {
+    if (barData.length === 0) return null;
+    return {
+      chart: 'top_body_parts_frequency' as const,
+      period_days: selectedDays,
+      items: barData.map((d) => ({ body_part: d.x, count: d.y })),
+    };
+  }, [barData, selectedDays]);
+
+  const emotionPayload = useMemo(() => {
+    const total = emotions.good + emotions.normal + emotions.bad;
+    if (emotionLineData.length === 0 && total === 0) return null;
+    return {
+      chart: 'emotion_trend' as const,
+      period_days: selectedDays,
+      summary: { good: emotions.good, normal: emotions.normal, bad: emotions.bad },
+      daily: emotionLineData.map((d) => ({ date: d.x, score: d.y })),
+    };
+  }, [emotionLineData, emotions, selectedDays]);
+
+  const aiPayloadByKey = useMemo(
+    () =>
+      ({
+        intensity: intensityPayload,
+        barFreq: barFreqPayload,
+        emotion: emotionPayload,
+      }) as Record<ChartHintKey, unknown>,
+    [intensityPayload, barFreqPayload, emotionPayload],
+  );
+
+  const cacheKeyFor = useCallback((key: ChartHintKey, payload: unknown) => {
+    return `${key}:${JSON.stringify(payload)}`;
+  }, []);
+
+  /** 캐시 우선 → 없으면 sendMessage 호출. 동일 입력은 같은 결과를 즉시 반환 (periodKey별 UI 상태 갱신) */
+  const fetchAnalysis = useCallback(
+    async (key: ChartHintKey, payload: unknown, periodKey: PeriodKey) => {
+      if (payload == null) return;
+      const cacheKey = cacheKeyFor(key, payload);
+      const cached = aiCacheRef.current.get(cacheKey);
+      if (cached) {
+        setAiResultByPeriod((prev) => ({
+          ...prev,
+          [periodKey]: { ...prev[periodKey], [key]: cached },
+        }));
+        setAiErrorByPeriod((prev) => ({
+          ...prev,
+          [periodKey]: { ...prev[periodKey], [key]: null },
+        }));
+        setAiLoadingByPeriod((prev) => ({
+          ...prev,
+          [periodKey]: { ...prev[periodKey], [key]: false },
+        }));
+        return;
+      }
+
+      setAiLoadingByPeriod((prev) => ({
+        ...prev,
+        [periodKey]: { ...prev[periodKey], [key]: true },
+      }));
+      setAiErrorByPeriod((prev) => ({
+        ...prev,
+        [periodKey]: { ...prev[periodKey], [key]: null },
+      }));
+      setAiResultByPeriod((prev) => ({
+        ...prev,
+        [periodKey]: { ...prev[periodKey], [key]: null },
+      }));
+
+      try {
+        const text = await sendMessage(
+          [{ role: 'user', content: JSON.stringify(payload) }],
+          'report-insight',
+        );
+        const trimmed = text.trim();
+        aiCacheRef.current.set(cacheKey, trimmed);
+        setAiResultByPeriod((prev) => ({
+          ...prev,
+          [periodKey]: { ...prev[periodKey], [key]: trimmed },
+        }));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'AI 분석을 불러오지 못했어요.';
+        setAiErrorByPeriod((prev) => ({
+          ...prev,
+          [periodKey]: { ...prev[periodKey], [key]: msg },
+        }));
+      } finally {
+        setAiLoadingByPeriod((prev) => ({
+          ...prev,
+          [periodKey]: { ...prev[periodKey], [key]: false },
+        }));
+      }
+    },
+    [cacheKeyFor],
+  );
+
+  const aiOpen = aiOpenByPeriod[period];
+  const aiLoading = aiLoadingByPeriod[period];
+  const aiResult = aiResultByPeriod[period];
+  const aiError = aiErrorByPeriod[period];
+
+  /** 카드가 열려 있는 동안 데이터(=payload)가 바뀌면 자동 재분석 (캐시 hit이면 즉시) */
+  useEffect(() => {
+    if (!aiOpen.intensity || !intensityPayload) return;
+    fetchAnalysis('intensity', intensityPayload, period);
+  }, [period, aiOpen.intensity, intensityPayload, fetchAnalysis]);
+
+  useEffect(() => {
+    if (!aiOpen.barFreq || !barFreqPayload) return;
+    fetchAnalysis('barFreq', barFreqPayload, period);
+  }, [period, aiOpen.barFreq, barFreqPayload, fetchAnalysis]);
+
+  useEffect(() => {
+    if (!aiOpen.emotion || !emotionPayload) return;
+    fetchAnalysis('emotion', emotionPayload, period);
+  }, [period, aiOpen.emotion, emotionPayload, fetchAnalysis]);
+
+  const toggleAi = useCallback((key: ChartHintKey) => {
+    setAiOpenByPeriod((prev) => ({
+      ...prev,
+      [period]: {
+        ...prev[period],
+        [key]: !prev[period][key],
+      },
+    }));
+  }, [period]);
+
+  const retryAi = useCallback(
+    (key: ChartHintKey) => {
+      const payload = aiPayloadByKey[key];
+      if (payload == null) return;
+      const cacheKey = cacheKeyFor(key, payload);
+      aiCacheRef.current.delete(cacheKey);
+      fetchAnalysis(key, payload, period);
+    },
+    [aiPayloadByKey, cacheKeyFor, fetchAnalysis, period],
+  );
+
   const chartsReady = Boolean(chartAxisFont);
+
+  /** 차트 아래에 붙는 'AI 분석 보기' 카드 — 닫혀 있을 때는 버튼만, 열리면 결과/로딩/에러 노출 */
+  const renderAiCard = (key: ChartHintKey) => {
+    const open = aiOpen[key];
+    const isLoading = aiLoading[key];
+    const result = aiResult[key];
+    const error = aiError[key];
+
+    return (
+      <View style={styles.aiCard}>
+        <Pressable
+          onPress={() => toggleAi(key)}
+          style={({ pressed }) => [styles.aiToggleBtn, pressed && styles.aiToggleBtnPressed]}
+          accessibilityRole="button"
+          accessibilityLabel={open ? 'AI 분석 접기' : 'AI 분석 보기'}
+          accessibilityState={{ expanded: open }}
+        >
+          <Text style={styles.aiToggleText}>{open ? 'AI 분석 접기' : 'AI 분석 보기'}</Text>
+        </Pressable>
+        {open ? (
+          <View style={styles.aiBody}>
+            {isLoading ? (
+              <View style={styles.aiLoadingBox}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.aiLoadingText}>AI가 분석 중이에요…</Text>
+              </View>
+            ) : error ? (
+              <>
+                <Text style={styles.aiErrorText}>{error}</Text>
+                <Pressable
+                  onPress={() => retryAi(key)}
+                  style={({ pressed }) => [styles.aiRetryBtn, pressed && styles.aiRetryBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="AI 분석 다시 시도"
+                >
+                  <Text style={styles.aiRetryText}>다시 시도</Text>
+                </Pressable>
+              </>
+            ) : result ? (
+              <Text style={styles.aiText}>{result}</Text>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
 
   const chartInnerWidth = Math.max(0, windowWidth - CHART_HORIZONTAL_INSETS);
   const lineChartHeight = Math.round(
@@ -308,13 +566,28 @@ export default function ReportScreen() {
         </View>
 
         <View style={[styles.section, styles.sectionChartOverflow]}>
-          <Text style={[styles.sectionTitle, styles.chartBlockTitle]}>통증 강도 추이 (부위별)</Text>
-          <Text style={styles.chartHint}>
-            부위는 탭으로 바꿔서 볼 수 있어요. 하루에 여러 번 기록했다면 그중 가장 많이 나온
-            강도를 그날의 점으로 표시하고, 횟수가 같을 때는 마지막에 남긴 기록을 따라가요.
-            여기에는 기간 안에서 자주 기록된 부위가 많은 순으로 최대 {INTENSITY_PART_LINE_COUNT}
-            개만 나와요.
-          </Text>
+          <View style={styles.chartHeaderRow}>
+            <Text style={[styles.sectionTitle, styles.chartTitleInRow]}>통증 강도 추이 (부위별)</Text>
+            <Pressable
+              onPress={() => toggleChartHint('intensity')}
+              style={({ pressed }) => [styles.hintToggleBtn, pressed && styles.hintToggleBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="통증 강도 추이 안내"
+              accessibilityState={{ expanded: chartHintOpen.intensity }}
+            >
+              <Text style={styles.hintToggleText}>
+                안내 {chartHintOpen.intensity ? '접기' : '보기'}
+              </Text>
+            </Pressable>
+          </View>
+          {chartHintOpen.intensity ? (
+            <Text style={styles.chartHint}>
+              부위는 탭으로 바꿔서 볼 수 있어요. 하루에 여러 번 기록했다면 그중 가장 많이 나온
+              강도를 그날의 점으로 표시하고, 횟수가 같을 때는 마지막에 남긴 기록을 따라가요.
+              여기에는 기간 안에서 자주 기록된 부위가 많은 순으로 최대 {INTENSITY_PART_LINE_COUNT}
+              개만 나와요.
+            </Text>
+          ) : null}
           {loading ? (
             <View style={styles.loadingBox}>
               <ActivityIndicator size="small" color={Colors.primary} />
@@ -429,12 +702,32 @@ export default function ReportScreen() {
               )}
             </>
           )}
+          {!loading && intensityPayload ? renderAiCard('intensity') : null}
         </View>
 
         <View style={[styles.section, styles.sectionChartOverflow]}>
-          <Text style={[styles.sectionTitle, styles.chartBlockTitle]}>
-            부위별 빈도 (상위 {INTENSITY_PART_LINE_COUNT}개)
-          </Text>
+          <View style={styles.chartHeaderRow}>
+            <Text style={[styles.sectionTitle, styles.chartTitleInRow]}>
+              부위별 빈도 (상위 {INTENSITY_PART_LINE_COUNT}개)
+            </Text>
+            <Pressable
+              onPress={() => toggleChartHint('barFreq')}
+              style={({ pressed }) => [styles.hintToggleBtn, pressed && styles.hintToggleBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="부위별 빈도 안내"
+              accessibilityState={{ expanded: chartHintOpen.barFreq }}
+            >
+              <Text style={styles.hintToggleText}>
+                안내 {chartHintOpen.barFreq ? '접기' : '보기'}
+              </Text>
+            </Pressable>
+          </View>
+          {chartHintOpen.barFreq ? (
+            <Text style={styles.chartHint}>
+              선택한 기간 안에서 부위별로 통증을 기록한 횟수예요. 위 통증 추이 탭과 같은 순서로, 자주
+              기록된 부위 상위 {INTENSITY_PART_LINE_COUNT}개만 보여요.
+            </Text>
+          ) : null}
           {loading ? (
             <View style={styles.loadingBox}>
               <ActivityIndicator size="small" color={Colors.primary} />
@@ -500,14 +793,30 @@ export default function ReportScreen() {
               </View>
             </View>
           )}
+          {!loading && barFreqPayload ? renderAiCard('barFreq') : null}
         </View>
 
         <View style={[styles.section, styles.sectionChartOverflow]}>
-          <Text style={[styles.sectionTitle, styles.chartBlockTitle]}>감정 상태 추이</Text>
-          <Text style={styles.chartHint}>
-            같은 날 여러 번 기록한 경우 그날 가장 많이 나온 감정으로 표시해요. 동률이면 가장 마지막
-            기록을 써요.
-          </Text>
+          <View style={styles.chartHeaderRow}>
+            <Text style={[styles.sectionTitle, styles.chartTitleInRow]}>감정 상태 추이</Text>
+            <Pressable
+              onPress={() => toggleChartHint('emotion')}
+              style={({ pressed }) => [styles.hintToggleBtn, pressed && styles.hintToggleBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="감정 상태 추이 안내"
+              accessibilityState={{ expanded: chartHintOpen.emotion }}
+            >
+              <Text style={styles.hintToggleText}>
+                안내 {chartHintOpen.emotion ? '접기' : '보기'}
+              </Text>
+            </Pressable>
+          </View>
+          {chartHintOpen.emotion ? (
+            <Text style={styles.chartHint}>
+              같은 날 여러 번 기록한 경우 그날 가장 많이 나온 감정으로 표시해요. 동률이면 가장 마지막
+              기록을 써요.
+            </Text>
+          ) : null}
           {loading ? (
             <View style={styles.loadingBox}>
               <ActivityIndicator size="small" color={Colors.primary} />
@@ -579,6 +888,7 @@ export default function ReportScreen() {
               </View>
             </>
           )}
+          {!loading && emotionPayload ? renderAiCard('emotion') : null}
         </View>
       </ScrollView>
     </View>
@@ -635,11 +945,34 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 10,
   },
-  /** 차트 카드 제목 — 다른 카드 제목과 동일 타이포, 아래쪽은 그래프와 간격 추가 */
-  chartBlockTitle: {
-    alignSelf: 'stretch',
-    textAlign: 'left',
-    marginBottom: 14,
+  chartHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 12,
+  },
+  chartTitleInRow: {
+    flex: 1,
+    minWidth: 0,
+    marginBottom: 0,
+  },
+  hintToggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: Colors.ocean.heroWash,
+    borderWidth: 1,
+    borderColor: Colors.ocean.tideBorder,
+    flexShrink: 0,
+  },
+  hintToggleBtnPressed: {
+    opacity: 0.85,
+  },
+  hintToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   sectionTitleSpacing: {
     marginBottom: 12,
@@ -725,7 +1058,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textLight,
     lineHeight: 16,
-    marginTop: -6,
     marginBottom: 12,
   },
   emotionCard: {
@@ -741,5 +1073,72 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.text,
+  },
+  aiCard: {
+    marginTop: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.ocean.tideBorder,
+    backgroundColor: Colors.ocean.heroWash,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  aiToggleBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.ocean.tideBorder,
+  },
+  aiToggleBtnPressed: {
+    opacity: 0.85,
+  },
+  aiToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  aiBody: {
+    marginTop: 10,
+  },
+  aiLoadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  aiLoadingText: {
+    fontSize: 12,
+    color: Colors.textLight,
+  },
+  aiText: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: Colors.text,
+  },
+  aiErrorText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  aiRetryBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  aiRetryBtnPressed: {
+    opacity: 0.85,
+  },
+  aiRetryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
   },
 });

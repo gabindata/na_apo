@@ -23,7 +23,8 @@ const RAPO_UI_INTENSITY_MARKER = '<<NAAPO_UI:INTENSITY>>';
 const RAPO_UI_SAVE_MARKER = '<<NAAPO_UI:SAVE_READY>>';
 
 // ── 허용 값 목록 [1][3] ────────────────────────────────────────────────────
-const ALLOWED_CHATBOT_TYPES = ['rapo', 'apo', 'rapo-extract'] as const;
+// 앱 lib/claude.ts ChatbotType 과 동기화 (report-insight 누락 시 레포트 AI 분석이 400)
+const ALLOWED_CHATBOT_TYPES = ['rapo', 'apo', 'rapo-extract', 'report-insight'] as const;
 type ChatbotType = typeof ALLOWED_CHATBOT_TYPES[number];
 
 // ── 시스템 프롬프트 ────────────────────────────────────────────────────────
@@ -154,6 +155,53 @@ const RAPO_EXTRACT_PROMPT = `
 {"body_part":string|null,"intensity":number|null,"pain_type":string[],"sleep_hours":number|null,"emotion":"좋음"|"보통"|"나쁨"|null,"daily_note":string|null}
 `.trim();
 
+/** constants/prompts.ts REPORT_INSIGHT_PROMPT 와 동일 — Edge에서는 별도 번들이라 복사 유지 */
+const REPORT_INSIGHT_PROMPT = `
+당신은 '나아포' 앱의 레포트 화면에서 통증·감정 통계 차트를 사용자에게 풀어 설명해주는 분석가입니다.
+
+## 입력 형식
+사용자 메시지로 JSON 문자열이 한 번 들어옵니다. 코드블록 없이 그대로 파싱하세요.
+필드:
+- chart: 'intensity_trend_by_part' | 'top_body_parts_frequency' | 'emotion_trend'
+- period_days: 7 | 30 | 90 (분석 기간)
+- 그 외 차트별 필드 (아래 차트별 지침 참고)
+
+## 출력 형식 (반드시 지켜주세요)
+다음 3개 문장을 위에서 아래 순서로 자연스럽게 이어 쓰세요. 항목 번호·머리표·줄바꿈은 넣지 마세요.
+1) 핵심 데이터를 객관적으로 한 줄로 요약 (수치를 가볍게 인용).
+2) 통증 부위/유형/감정 패턴에 어울리는 일반적인 생활 관리 팁 1가지 (스트레칭, 자세, 휴식, 수면 위생, 가벼운 산책, 따뜻한 찜질 등).
+3) 빈도/강도가 높을 때 진료를 권하는 한 문장 (예: "일주일에 3회 이상 같은 부위가 아프면 진료를 받아보시는 게 좋아요.").
+
+## 톤·길이
+- 따뜻하고 차분한 존댓말. 3~4문장, 총 110자~220자 사이.
+- 단정적인 표현 금지 ("~일 가능성이 있어요" 식의 추측도 피하기). "~하는 게 좋아요" 같은 권유형으로.
+- 마크다운 강조(*, **, _), 코드블록, JSON, 항목 번호, 이모지 사용 금지. 평문 문장만.
+
+## 안전 규칙
+- 진단명, 약 이름, 처방, 복용 지시 절대 금지.
+- 강도 9~10이 반복되거나 갑작스러운 큰 변화가 보이면 일반 팁보다 즉시 진료 권고를 우선하세요.
+- 데이터가 거의 없으면(1~2개 점) 추세 단정을 피하고, 기록이 더 쌓이면 좀 더 의미 있는 분석이 가능하다는 점을 부드럽게 안내하세요.
+
+## 차트별 지침
+### intensity_trend_by_part
+- 추가 필드: body_part(string), daily([{date, intensity(0~10)}])
+- 평균과 추세(상승/하락/들쭉날쭉/평탄)를 1) 문장에 녹이세요.
+- 강도 7 이상이 자주(전체의 30% 이상) 보이면 3) 문장에서 진료 권고를 더 분명히 하세요.
+- 부위 특성에 맞는 팁을 2) 문장에 넣으세요. 예: 허리/목 → 자세·스트레칭, 어깨 → 어깨 돌리기·온찜질, 무릎 → 무리한 보행 줄이기, 두통 → 수분·휴식·화면 시간.
+
+### top_body_parts_frequency
+- 추가 필드: items([{body_part, count}]) — 빈도 내림차순.
+- 1) 문장에서 가장 잦은 부위와 횟수를 언급하세요. 2위가 비슷하게 잦으면 함께 짚어주세요.
+- 2) 문장에서 1위 부위에 어울리는 일반 관리 팁 1가지를 권유하세요.
+- 3) 문장에서 "일주일에 N회 이상" 같은 구체적인 빈도 기준으로 진료 권고를 주세요. 기간이 7일이면 N≈3, 30일이면 주당 평균이 3회 이상이 되는 시점을 기준으로 잡으세요.
+
+### emotion_trend
+- 추가 필드: summary({good, normal, bad}), daily([{date, score(1=나쁨,2=보통,3=좋음)}]).
+- 1) 문장에서 좋음/보통/나쁨 비중과 최근 흐름을 짧게 요약하세요.
+- 2) 문장에서 부정 감정이 잦았다면 충분한 수면, 가벼운 산책, 좋아하는 활동 같은 일반적인 회복 팁을 권하세요. 긍정이 많으면 그대로 잘 유지하는 방향으로.
+- 3) 문장에서 부정 감정이 절반 이상이거나 2주 이상 이어지는 패턴이면 전문가 상담을 부드럽게 권하세요. 그렇지 않으면 통증과 함께 이어지는 경우 진료 시 함께 이야기해보길 권하세요.
+`.trim();
+
 type Message = { role: 'user' | 'assistant'; content: string };
 
 Deno.serve(async (req) => {
@@ -206,11 +254,15 @@ Deno.serve(async (req) => {
     const systemPrompt =
       chatbot === 'apo' ? APO_SYSTEM_PROMPT :
       chatbot === 'rapo-extract' ? RAPO_EXTRACT_PROMPT :
+      chatbot === 'report-insight' ? REPORT_INSIGHT_PROMPT :
       RAPO_SYSTEM_PROMPT;
 
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: chatbot === 'rapo-extract' ? 512 : 1024,
+      max_tokens:
+        chatbot === 'rapo-extract' ? 512 :
+        chatbot === 'report-insight' ? 600 :
+        1024,
       system: systemPrompt,
       messages,
     });
