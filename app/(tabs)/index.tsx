@@ -7,6 +7,7 @@ import type { DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../../components/common/Card';
 import { CharacterShop } from '../../components/home/CharacterShop';
+import { DayPainDetailModal } from '../../components/home/DayPainDetailModal';
 import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
 import { Colors } from '../../constants/colors';
 import { getCharacterById } from '../../constants/characters';
@@ -47,6 +48,7 @@ export default function HomeScreen() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [shopVisible, setShopVisible] = useState(false);
+  const [detailDateKey, setDetailDateKey] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -118,6 +120,11 @@ export default function HomeScreen() {
       {},
     );
   }, [intensityColor, monthlyRecords]);
+
+  const datesWithRecords = useMemo(
+    () => new Set(monthlyRecords.map((r) => r.date)),
+    [monthlyRecords],
+  );
 
   const magazine = useMemo(() => recommendMagazine(stats?.topBodyPart), [stats?.topBodyPart]);
   const magazineThumb = useMemo(
@@ -280,9 +287,15 @@ export default function HomeScreen() {
                 />
               ))}
             </View>
+            <Text style={styles.calendarHint}>색칠된 날짜를 탭하면 그날 기록을 확인할 수 있어요.</Text>
             <Calendar
               markingType="custom"
               markedDates={markedDates}
+              onDayPress={(day: DateData) => {
+                if (datesWithRecords.has(day.dateString)) {
+                  setDetailDateKey(day.dateString);
+                }
+              }}
               onMonthChange={(date: DateData) => {
                 setVisibleMonth({ year: date.year, month: date.month });
               }}
@@ -358,6 +371,12 @@ export default function HomeScreen() {
           <MedicineAlarmSection />
         </View>
       </ScrollView>
+
+      <DayPainDetailModal
+        visible={!!detailDateKey}
+        dateKey={detailDateKey}
+        onClose={() => setDetailDateKey(null)}
+      />
 
       {user && (
         <CharacterShop
@@ -466,6 +485,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
+    marginBottom: 14,
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -652,6 +672,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textLight,
     marginBottom: 6,
+  },
+  calendarHint: {
+    fontSize: 11,
+    color: Colors.primary,
+    fontWeight: '600',
+    marginBottom: 10,
+    lineHeight: 16,
   },
   heatmapStrip: {
     flexDirection: 'row',

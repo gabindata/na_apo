@@ -47,6 +47,17 @@ function monthRangeUtcStrings(year: number, month: number): { startIso: string; 
   return { startIso: start.toISOString(), endExclusiveIso: endExclusive.toISOString() };
 }
 
+/** 로컬 YYYY-MM-DD 하루 구간 → UTC ISO 문자열 범위 [start, 다음날 자정) */
+function localDayRangeUtcStrings(dateKey: string): { startIso: string; endExclusiveIso: string } {
+  const parts = dateKey.split('-').map(Number);
+  const y = parts[0]!;
+  const m = parts[1]!;
+  const d = parts[2]!;
+  const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const endExclusive = new Date(y, m - 1, d + 1, 0, 0, 0, 0);
+  return { startIso: start.toISOString(), endExclusiveIso: endExclusive.toISOString() };
+}
+
 /** 이번 주 월요일 00:00 ~ 일요일 끝 (로컬) */
 function thisWeekRangeIso(): { startIso: string; endIso: string } {
   const now = new Date();
@@ -121,6 +132,31 @@ export async function fetchMonthlyRecords(
   return Array.from(byDay.entries())
     .map(([date, intensity]) => ({ date, intensity }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * 특정 로컬 날짜의 통증 기록 전체 (캘린더 날짜 탭 상세용, 최신순)
+ */
+export async function fetchPainRecordsForLocalDate(dateKey: string): Promise<PainRecord[]> {
+  const userId = await requireUserId();
+  const { startIso, endExclusiveIso } = localDayRangeUtcStrings(dateKey);
+
+  const { data, error } = await supabase
+    .from('pain_records')
+    .select(
+      'id, user_id, body_part, intensity, pain_type, sleep_hours, emotion, daily_note, recorded_at',
+    )
+    .eq('user_id', userId)
+    .gte('recorded_at', startIso)
+    .lt('recorded_at', endExclusiveIso);
+
+  if (error) throw error;
+
+  let rows = (data ?? []) as PainRecord[];
+  rows = rows.filter((r) => toLocalDateKey(recordTime(r)) === dateKey);
+  rows.sort((a, b) => new Date(recordTime(b)).getTime() - new Date(recordTime(a)).getTime());
+
+  return rows;
 }
 
 /** 해당 월 통계 (홈 '월별 통계' 표시용) */
