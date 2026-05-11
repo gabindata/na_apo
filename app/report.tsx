@@ -27,7 +27,7 @@ const T = {
 const AXIS_GRID_COLOR = 'rgba(100,160,210,0.30)';
 const AXIS_TICK_WIDTH = 1;
 /** Skia 축 숫자·날짜 라벨 (font 없으면 victory-native가 텍스트를 그리지 않음) */
-const CHART_AXIS_FONT_SRC = require('../assets/fonts/SeoulNamsan/SeoulNamsanM.ttf');
+const CHART_AXIS_FONT_SRC = require('../assets/fonts/SeoulNamsan/alternative/Pretendard-Regular.ttf');
 const CHART_AXIS_FONT_SIZE = 11;
 
 /** ScrollView 좌우(20×2) + 카드 패딩(styles.section 과 동일 14×2) — 차트 높이 비율 계산용 */

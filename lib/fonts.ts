@@ -1,33 +1,48 @@
 import { StyleSheet, TextStyle } from 'react-native';
 
-// 서울남산체 폰트 자산 — useFonts()에 전달
+// Pretendard 폰트 자산 — useFonts()에 전달
 export const FONT_ASSETS = {
-  SeoulNamsanL: require('../assets/fonts/SeoulNamsan/SeoulNamsanL.ttf'),
-  SeoulNamsanM: require('../assets/fonts/SeoulNamsan/SeoulNamsanM.ttf'),
-  SeoulNamsanB: require('../assets/fonts/SeoulNamsan/SeoulNamsanB.ttf'),
-  SeoulNamsanEB: require('../assets/fonts/SeoulNamsan/SeoulNamsanEB.ttf'),
+  PretendardThin:       require('../assets/fonts/SeoulNamsan/alternative/Pretendard-Thin.ttf'),
+  PretendardExtraLight: require('../assets/fonts/SeoulNamsan/alternative/Pretendard-ExtraLight.ttf'),
+  PretendardLight:      require('../assets/fonts/SeoulNamsan/alternative/Pretendard-Light.ttf'),
+  PretendardRegular:    require('../assets/fonts/SeoulNamsan/alternative/Pretendard-Regular.ttf'),
+  PretendardMedium:     require('../assets/fonts/SeoulNamsan/alternative/Pretendard-Medium.ttf'),
+  PretendardSemiBold:   require('../assets/fonts/SeoulNamsan/alternative/Pretendard-SemiBold.ttf'),
+  PretendardBold:       require('../assets/fonts/SeoulNamsan/alternative/Pretendard-Bold.ttf'),
+  PretendardExtraBold:  require('../assets/fonts/SeoulNamsan/alternative/Pretendard-ExtraBold.ttf'),
+  PretendardBlack:      require('../assets/fonts/SeoulNamsan/alternative/Pretendard-Black.ttf'),
 };
 
 export const Fonts = {
-  light: 'SeoulNamsanL',
-  medium: 'SeoulNamsanM',
-  bold: 'SeoulNamsanB',
-  extraBold: 'SeoulNamsanEB',
+  thin:       'PretendardThin',
+  extraLight: 'PretendardExtraLight',
+  light:      'PretendardLight',
+  regular:    'PretendardRegular',
+  medium:     'PretendardMedium',
+  semiBold:   'PretendardSemiBold',
+  bold:       'PretendardBold',
+  extraBold:  'PretendardExtraBold',
+  black:      'PretendardBlack',
 } as const;
 
-// fontWeight → 서울남산 family 매핑
+// fontWeight → Pretendard family 매핑
 function pickFontFamily(weight: TextStyle['fontWeight']): string {
-  if (weight == null) return Fonts.medium;
+  if (weight == null) return Fonts.regular;
   if (weight === 'bold') return Fonts.bold;
-  if (weight === 'normal') return Fonts.medium;
+  if (weight === 'normal') return Fonts.regular;
   const n = typeof weight === 'number' ? weight : parseInt(weight as string, 10);
   if (!Number.isNaN(n)) {
+    if (n >= 900) return Fonts.black;
     if (n >= 800) return Fonts.extraBold;
-    if (n >= 600) return Fonts.bold;
-    if (n >= 400) return Fonts.medium;
-    return Fonts.light;
+    if (n >= 700) return Fonts.bold;
+    if (n >= 600) return Fonts.semiBold;
+    if (n >= 500) return Fonts.medium;
+    if (n >= 400) return Fonts.regular;
+    if (n >= 300) return Fonts.light;
+    if (n >= 200) return Fonts.extraLight;
+    return Fonts.thin;
   }
-  return Fonts.medium;
+  return Fonts.regular;
 }
 
 // 텍스트 관련 스타일 여부 판별 (View 등 레이아웃 스타일은 건드리지 않음)

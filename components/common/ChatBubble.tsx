@@ -91,7 +91,7 @@ export function ChatBubble({
           <View style={styles.bubbleBot}>
             <View style={styles.bubbleBotShine} />
             {typeof children === 'string' ? (
-              <Text style={styles.textBot}>{children}</Text>
+              <Text style={styles.textBot} lineBreakStrategyIOS="hangul-word" textBreakStrategy="balanced">{children}</Text>
             ) : (
               <View>{children}</View>
             )}
@@ -105,7 +105,7 @@ export function ChatBubble({
             style={styles.bubbleUser}
           >
             {typeof children === 'string' ? (
-              <Text style={styles.textUser}>{children}</Text>
+              <Text style={styles.textUser} lineBreakStrategyIOS="hangul-word" textBreakStrategy="balanced">{children}</Text>
             ) : (
               <View>{children}</View>
             )}

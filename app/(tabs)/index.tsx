@@ -280,10 +280,16 @@ export default function HomeScreen() {
               {/* 텍스트 */}
               <View style={styles.magazineTextWrap}>
                 <Text style={styles.magazinePickLabel}>EDITOR'S PICK</Text>
-                <Text style={styles.magazineTitle} numberOfLines={2}>
+                <Text style={styles.magazineTitle} numberOfLines={3}
+                  lineBreakStrategyIOS="hangul-word"
+                  textBreakStrategy="balanced"
+                >
                   {magazine.title}
                 </Text>
-                <Text style={styles.magazineSub} numberOfLines={2}>
+                <Text style={styles.magazineSub} numberOfLines={2}
+                  lineBreakStrategyIOS="hangul-word"
+                  textBreakStrategy="balanced"
+                >
                   {magazine.subtitle}
                 </Text>
                 <View style={styles.magazineReadRow}>

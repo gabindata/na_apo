@@ -65,8 +65,8 @@ export default function MagazineScreen() {
         {/* 타이틀 */}
         <View style={styles.titleSection}>
           <Text style={styles.pickLabel}>EDITOR'S PICK</Text>
-          <Text style={styles.title}>{magazine.title}</Text>
-          <Text style={styles.subtitle}>{magazine.subtitle}</Text>
+          <Text style={styles.title} lineBreakStrategyIOS="hangul-word" textBreakStrategy="balanced">{magazine.title}</Text>
+          <Text style={styles.subtitle} lineBreakStrategyIOS="hangul-word" textBreakStrategy="balanced">{magazine.subtitle}</Text>
         </View>
 
         {magazine.content.map((block, index) => (
@@ -161,7 +161,7 @@ function MagazineBlockView({
 
     case 'body':
       return (
-        <Text style={styles.body} lineBreakStrategyIOS="standard" textBreakStrategy="simple">
+        <Text style={styles.body} lineBreakStrategyIOS="hangul-word" textBreakStrategy="balanced">
           {block.text}
         </Text>
       );
@@ -172,7 +172,7 @@ function MagazineBlockView({
           {block.items.map((item, i) => (
             <View key={i} style={styles.tipRow}>
               <Text style={styles.tipBullet}>✅</Text>
-              <Text style={styles.tipText} lineBreakStrategyIOS="standard" textBreakStrategy="simple">
+              <Text style={styles.tipText} lineBreakStrategyIOS="hangul-word" textBreakStrategy="balanced">
                 {item}
               </Text>
             </View>
@@ -187,7 +187,7 @@ function MagazineBlockView({
       return (
         <View style={styles.highlightBox}>
           <Text style={styles.highlightLabel}>꼭 기억하세요</Text>
-          <Text style={styles.highlightText} lineBreakStrategyIOS="standard" textBreakStrategy="simple">
+          <Text style={styles.highlightText} lineBreakStrategyIOS="hangul-word" textBreakStrategy="balanced">
             {block.text}
           </Text>
         </View>
