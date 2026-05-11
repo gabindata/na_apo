@@ -24,8 +24,8 @@ import { fetchUserProfile, type UserProfile } from '../../lib/userProfile';
 
 // ── 디자인 토큰 ──────────────────────────────────────────
 const T = {
-  text:      '#EAF4FF',
-  textMuted: '#A4C2DB',
+  text:      '#FFFFFF',
+  textMuted: '#C8DFEF',
   primary:   '#4A90D9',
   secondary: '#7EC8E3',
   accent:    '#2E5FA3',
@@ -319,10 +319,10 @@ export default function HomeScreen() {
             theme={{
               backgroundColor: 'transparent',
               calendarBackground: 'transparent',
-              todayTextColor: '#EAF4FF',
+              todayTextColor: '#FFFFFF',
               todayBackgroundColor: 'rgba(74,144,217,0.38)',
               selectedDayBackgroundColor: T.primary,
-              selectedDayTextColor: '#EAF4FF',
+              selectedDayTextColor: '#FFFFFF',
               dayTextColor: 'rgba(234,244,255,0.88)',
               textDisabledColor: 'rgba(164,194,219,0.28)',
               monthTextColor: T.text,

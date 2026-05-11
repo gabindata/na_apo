@@ -25,8 +25,8 @@ const INPUT_MAX_LINES = 5;
 const CHAT_EDGE_VERTICAL_PAD = 4;
 
 const T = {
-  text:      '#EAF4FF',
-  textMuted: '#A4C2DB',
+  text:      '#FFFFFF',
+  textMuted: '#C8DFEF',
   secondary: '#7EC8E3',
   primary:   '#4A90D9',
 } as const;

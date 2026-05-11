@@ -11,11 +11,18 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { CHARACTERS } from '../../constants/characters';
 import { purchaseCharacter, selectCharacter } from '../../lib/characters';
-import { Colors } from '../../constants/colors';
 
 const COIN_IMG = require('../../assets/logo/coin.png');
+
+const T = {
+  text:      '#0C2A45',
+  textMuted: '#4A7898',
+  secondary: '#1A6FAD',
+  primary:   '#2468B8',
+} as const;
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_PAD = 16;
@@ -111,7 +118,11 @@ export function CharacterShop({
       statusBarTranslucent
     >
       <View style={styles.overlay}>
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <LinearGradient
+          colors={['#F2F9FF', '#D0E9F8', '#A8D4EE']}
+          locations={[0, 0.5, 1]}
+          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}
+        >
           {/* ── 헤더 ── */}
           <View style={styles.header}>
             <Pressable
@@ -179,7 +190,7 @@ export function CharacterShop({
                   {/* 버튼 영역 */}
                   {isLoading ? (
                     <View style={styles.btn}>
-                      <ActivityIndicator size="small" color={Colors.primary} />
+                      <ActivityIndicator size="small" color={T.primary} />
                     </View>
                   ) : isSelected ? (
                     <View style={[styles.btn, styles.btnEquipped]}>
@@ -214,7 +225,7 @@ export function CharacterShop({
               );
             })}
           </ScrollView>
-        </View>
+        </LinearGradient>
       </View>
     </Modal>
   );
@@ -223,11 +234,10 @@ export function CharacterShop({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(10, 20, 40, 0.52)',
+    backgroundColor: 'rgba(10,20,40,0.45)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: Colors.background,
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
     maxHeight: '88%',
@@ -239,13 +249,15 @@ const styles = StyleSheet.create({
     paddingTop: 22,
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: 'rgba(100,160,210,0.30)',
   },
   closeBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: Colors.ocean.heroWash,
+    backgroundColor: 'rgba(255,255,255,0.60)',
+    borderWidth: 1,
+    borderColor: 'rgba(100,160,210,0.28)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -254,7 +266,7 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     fontSize: 15,
-    color: Colors.textLight,
+    color: T.textMuted,
     fontWeight: '700',
   },
   title: {
@@ -262,18 +274,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '700',
-    color: Colors.text,
+    color: T.text,
   },
   coinBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.ocean.heroWash,
+    backgroundColor: 'rgba(255,255,255,0.60)',
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+    borderColor: 'rgba(100,160,210,0.28)',
   },
   coinIcon: {
     width: 16,
@@ -282,18 +294,18 @@ const styles = StyleSheet.create({
   coinCount: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.accent,
+    color: T.primary,
   },
   feedback: {
     textAlign: 'center',
     fontSize: 13,
-    color: Colors.primary,
+    color: T.primary,
     fontWeight: '600',
     paddingVertical: 8,
   },
   hint: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: T.textMuted,
   },
   hintRow: {
     flexDirection: 'row',
@@ -323,16 +335,16 @@ const styles = StyleSheet.create({
     width: CARD_W - 4,
     height: CARD_W - 4,
     borderRadius: 18,
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255,255,255,0.62)',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: 'rgba(100,160,210,0.28)',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     marginBottom: 6,
   },
   imageBoxSelected: {
-    borderColor: Colors.primary,
+    borderColor: T.primary,
     borderWidth: 2.5,
   },
   charImg: {
@@ -341,7 +353,7 @@ const styles = StyleSheet.create({
   },
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.38)',
+    backgroundColor: 'rgba(0,0,0,0.30)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -353,19 +365,19 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.primary,
+    backgroundColor: T.primary,
     paddingVertical: 3,
     alignItems: 'center',
   },
   equippedBarText: {
     fontSize: 10,
-    color: Colors.white,
+    color: '#ffffff',
     fontWeight: '700',
   },
   charName: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.text,
+    color: T.text,
     marginBottom: 5,
   },
   btn: {
@@ -394,35 +406,37 @@ const styles = StyleSheet.create({
   btnEquipped: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: Colors.primary,
+    borderColor: T.primary,
   },
   btnTextEquipped: {
     fontSize: 12,
-    color: Colors.primary,
+    color: T.primary,
     fontWeight: '700',
   },
   btnSelect: {
-    backgroundColor: Colors.primary,
+    backgroundColor: T.primary,
   },
   btnTextSelect: {
     fontSize: 12,
-    color: Colors.white,
+    color: '#ffffff',
     fontWeight: '700',
   },
   btnBuy: {
-    backgroundColor: Colors.accent,
+    backgroundColor: T.secondary,
   },
   btnTextBuy: {
     fontSize: 12,
-    color: Colors.white,
+    color: '#ffffff',
     fontWeight: '700',
   },
   btnLocked: {
-    backgroundColor: Colors.border,
+    backgroundColor: 'rgba(100,160,210,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(100,160,210,0.25)',
   },
   btnTextLocked: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: T.textMuted,
     fontWeight: '600',
   },
 });

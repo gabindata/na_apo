@@ -41,8 +41,8 @@ Notifications.setNotificationHandler({
 });
 
 const T = {
-  text:      '#EAF4FF',
-  textMuted: '#A4C2DB',
+  text:      '#FFFFFF',
+  textMuted: '#C8DFEF',
   primary:   '#4A90D9',
   secondary: '#7EC8E3',
   accent:    '#2E5FA3',
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#EAF4FF',
+    color: '#FFFFFF',
   },
   statusRow: {
     marginTop: 10,
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
   },
   restartBtnText: {
     fontSize: 12,
-    color: '#EAF4FF',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   deleteBtn: {
@@ -838,6 +838,6 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#EAF4FF',
+    color: '#FFFFFF',
   },
 });

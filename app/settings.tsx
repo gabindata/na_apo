@@ -3,10 +3,17 @@ import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../components/common/Header';
-import { Colors } from '../constants/colors';
 import { useAuth } from '../contexts/AuthContext';
 import { useBgm } from '../contexts/BgmContext';
+
+const T = {
+  text:      '#0C2A45',
+  textMuted: '#4A7898',
+  secondary: '#1A6FAD',
+  primary:   '#2468B8',
+} as const;
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -33,12 +40,16 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={[styles.screenRoot, { paddingBottom: insets.bottom }]}>
+    <LinearGradient
+      colors={['#F2F9FF', '#D0E9F8', '#A8D4EE']}
+      locations={[0, 0.5, 1]}
+      style={[styles.screenRoot, { paddingBottom: insets.bottom }]}
+    >
       <Header
         title="설정"
         leftIcon={<Text style={styles.backIcon}>‹</Text>}
         onPressLeft={() => router.back()}
-        style={styles.headerStretch}
+        style={styles.headerLight}
       />
 
       <View style={styles.body}>
@@ -52,8 +63,8 @@ export default function SettingsScreen() {
               value={prefsLoaded && enabled}
               onValueChange={setEnabled}
               disabled={!prefsLoaded}
-              trackColor={{ false: Colors.border, true: Colors.secondary }}
-              thumbColor={Colors.white}
+              trackColor={{ false: 'rgba(100,160,210,0.30)', true: T.secondary }}
+              thumbColor={'#ffffff'}
               accessibilityLabel="배경음악 켜기"
             />
           </View>
@@ -69,9 +80,9 @@ export default function SettingsScreen() {
                 maximumValue={1}
                 value={volume}
                 onValueChange={setVolume}
-                minimumTrackTintColor={Colors.primary}
-                maximumTrackTintColor={Colors.border}
-                thumbTintColor={Colors.primary}
+                minimumTrackTintColor={T.primary}
+                maximumTrackTintColor={'rgba(100,160,210,0.30)'}
+                thumbTintColor={T.primary}
                 accessibilityLabel="배경음악 음량"
               />
             </View>
@@ -95,21 +106,21 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   screenRoot: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
-  headerStretch: {
-    alignSelf: 'stretch',
+  headerLight: {
+    backgroundColor: 'rgba(242,249,255,0.94)',
+    borderBottomColor: 'rgba(100,160,210,0.30)',
   },
   backIcon: {
     fontSize: 28,
-    color: Colors.primary,
+    color: T.secondary,
     fontWeight: '500',
     lineHeight: 28,
     paddingHorizontal: 8,
@@ -122,16 +133,16 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textLight,
+    color: T.textMuted,
     marginBottom: 10,
     marginLeft: 2,
     letterSpacing: -0.2,
   },
   section: {
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(255,255,255,0.62)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+    borderColor: 'rgba(100,160,210,0.28)',
     overflow: 'hidden',
   },
   sectionMarginBottom: {
@@ -153,13 +164,13 @@ const styles = StyleSheet.create({
   bgmTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.text,
+    color: T.text,
   },
   volumeBlock: {
     paddingHorizontal: 18,
     paddingBottom: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.ocean.tideBorder,
+    borderTopColor: 'rgba(100,160,210,0.28)',
   },
   volumeLabelRow: {
     flexDirection: 'row',
@@ -171,12 +182,12 @@ const styles = StyleSheet.create({
   volumeLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text,
+    color: T.text,
   },
   volumeValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.primary,
+    color: T.primary,
   },
   slider: {
     width: '100%',
@@ -187,7 +198,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   logoutRowPressed: {
-    backgroundColor: 'rgba(198, 40, 40, 0.06)',
+    backgroundColor: 'rgba(198,40,40,0.06)',
   },
   logoutRowDisabled: {
     opacity: 0.55,

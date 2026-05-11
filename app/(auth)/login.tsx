@@ -10,15 +10,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { OceanBubbles } from '../../components/ocean/OceanBubbles';
 import { supabase } from '../../lib/supabase';
 
-// ── 글래스 토큰 ───────────────────────────────────────────
+// ── 다크 오션 토큰 ─────────────────────────────────────────
 const G = {
-  glassBg: 'rgba(255,255,255,0.80)',
-  glassBorder: 'rgba(74,144,217,0.22)',
-  glassShine: 'rgba(255,255,255,0.95)',
-  text: '#13243C',
-  textMuted: '#6B8CAE',
-  primary: '#4A90D9',
-  accent: '#2E5FA3',
+  text:        '#FFFFFF',
+  textMuted:   '#C8DFEF',
+  secondary:   '#7EC8E3',
+  primary:     '#4A90D9',
+  inputBg:     'rgba(120,175,220,0.16)',
+  inputBorder: 'rgba(168,216,234,0.40)',
+  inputShine:  'rgba(255,255,255,0.22)',
 } as const;
 
 // ── Supabase 에러 메시지 변환 ─────────────────────────────
@@ -50,18 +50,18 @@ function GlassInput({
   return (
     <View style={input.wrapper}>
       <BlurView
-        intensity={16}
-        tint="light"
+        intensity={12}
+        tint="dark"
         experimentalBlurMethod="dimezisBlurView"
         style={input.blur}
       >
         <View style={input.overlay} />
         <View style={input.shine} />
-        <Ionicons name={iconName} size={18} color={G.textMuted} style={input.icon} />
+        <Ionicons name={iconName} size={18} color={G.secondary} style={input.icon} />
         <TextInput
           style={input.field}
           placeholder={placeholder}
-          placeholderTextColor={G.textMuted}
+          placeholderTextColor="rgba(164,194,219,0.50)"
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={secureTextEntry}
@@ -70,6 +70,7 @@ function GlassInput({
           autoCorrect={false}
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
+          selectionColor={G.secondary}
         />
       </BlurView>
     </View>
@@ -110,12 +111,11 @@ export default function LoginScreen() {
 
   return (
     <LinearGradient
-      colors={['#DCF0FC', '#B8DCF0', '#8BBDD9']}
-      locations={[0, 0.55, 1]}
+      colors={['#3A7AB0', '#1A4068', '#0F2840', '#0A1A2E']}
+      locations={[0, 0.35, 0.70, 1]}
       style={styles.container}
     >
-      {/* 3D 물방울 배경 */}
-      <OceanBubbles />
+      <OceanBubbles variant="home" />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -169,11 +169,11 @@ export default function LoginScreen() {
               disabled={!canSubmit}
               style={({ pressed }) => [
                 styles.loginBtn,
-                { opacity: canSubmit ? 1 : 0.45, transform: [{ scale: pressed ? 0.97 : 1 }] },
+                { opacity: canSubmit ? 1 : 0.40, transform: [{ scale: pressed ? 0.97 : 1 }] },
               ]}
             >
               <LinearGradient
-                colors={['#4F96DF', '#2D6BBF', '#1A4FA8']}
+                colors={['#5A9FE9', '#2E6BBF', '#1A4FA8']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.loginGradient}
@@ -207,11 +207,10 @@ const input = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: G.glassBorder,
-    // subtle shadow
-    shadowColor: '#4A90D9',
+    borderColor: G.inputBorder,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -222,7 +221,7 @@ const input = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: G.glassBg,
+    backgroundColor: G.inputBg,
   },
   shine: {
     position: 'absolute',
@@ -230,7 +229,7 @@ const input = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: G.glassShine,
+    backgroundColor: G.inputShine,
   },
   icon: {
     marginLeft: 16,
@@ -279,8 +278,8 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     fontWeight: '500',
-    color: 'rgba(19,36,60,0.55)',
-    letterSpacing: 0.1,
+    color: 'rgba(210,235,250,0.90)',
+    letterSpacing: 0.3,
     marginBottom: 36,
   },
 
@@ -299,7 +298,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     shadowColor: '#1A4FA8',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 8,
   },
@@ -309,7 +308,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loginText: {
-    color: '#fff',
+    color: '#EAF4FF',
     fontSize: 15,
     fontWeight: '700',
     letterSpacing: 0.2,
@@ -322,11 +321,11 @@ const styles = StyleSheet.create({
   },
   signupText: {
     fontSize: 13,
-    color: 'rgba(19,36,60,0.50)',
+    color: 'rgba(210,235,250,0.80)',
     fontWeight: '500',
   },
   signupBold: {
-    color: G.text,
+    color: G.secondary,
     fontWeight: '800',
   },
 });

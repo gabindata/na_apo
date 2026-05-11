@@ -4,11 +4,61 @@ import {
   StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { OceanBubbles } from '../../components/ocean/OceanBubbles';
 import { supabase } from '../../lib/supabase';
-import { Colors } from '../../constants/colors';
+
+const T = {
+  text:        '#FFFFFF',
+  textMuted:   'rgba(210,235,250,0.88)',
+  secondary:   '#7EC8E3',
+  primary:     '#4A90D9',
+  inputBg:     'rgba(120,175,220,0.16)',
+  inputBorder: 'rgba(168,216,234,0.32)',
+} as const;
 
 // 이메일 형식 정규식 (1차 검증)
 const EMAIL_REGEX = /\S+@\S+\.\S+/;
+
+function GlassInput({
+  placeholder, value, onChangeText,
+  secureTextEntry = false, keyboardType = 'default' as any,
+  textContentType, returnKeyType = 'done' as any, onSubmitEditing,
+}: {
+  placeholder: string; value: string; onChangeText: (v: string) => void;
+  secureTextEntry?: boolean; keyboardType?: any; textContentType?: any;
+  returnKeyType?: any; onSubmitEditing?: () => void;
+}) {
+  return (
+    <View style={input.wrapper}>
+      <BlurView
+        intensity={12}
+        tint="dark"
+        experimentalBlurMethod="dimezisBlurView"
+        style={input.blur}
+      >
+        <View style={input.overlay} />
+        <View style={input.shine} />
+        <TextInput
+          style={input.field}
+          placeholder={placeholder}
+          placeholderTextColor="rgba(164,194,219,0.50)"
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={secureTextEntry}
+          keyboardType={keyboardType}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType={textContentType}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          selectionColor={T.secondary}
+        />
+      </BlurView>
+    </View>
+  );
+}
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -19,17 +69,14 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
-    // trim 처리 (비밀번호는 trim 안 함)
     const trimmedNickname = nickname.trim();
     const trimmedEmail = email.trim();
 
-    // 빈값 체크
     if (!trimmedNickname || !trimmedEmail || !password || !passwordConfirm) {
       Alert.alert('알림', '모든 항목을 입력해주세요.');
       return;
     }
 
-    // 이메일 형식 1차 검증
     if (!EMAIL_REGEX.test(trimmedEmail)) {
       Alert.alert('알림', '올바른 이메일 형식을 입력해주세요.');
       return;
@@ -45,13 +92,8 @@ export default function SignupScreen() {
       return;
     }
 
-    // 닉네임 중복 여부: 현재는 중복 허용 정책
-    // 중복 비허용으로 변경 시 → users 테이블에 unique constraint 추가 +
-    // profileError 처리에서 unique violation 에러 코드(23505) 체크 필요
-
     setLoading(true);
     try {
-      // 1단계: Supabase Auth 회원가입
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
@@ -63,9 +105,6 @@ export default function SignupScreen() {
         return;
       }
 
-      // 2단계: users 테이블에 프로필 저장
-      // insert() 사용: 신규 가입이므로 적합
-      // 추후 소셜 로그인 추가 시 upsert() 전환 검토 필요
       if (data.user) {
         const { error: profileError } = await supabase.from('users').insert({
           id: data.user.id,
@@ -82,12 +121,8 @@ export default function SignupScreen() {
       }
 
       if (data.session) {
-        // Confirm email OFF → 세션이 즉시 생성됨
-        // AuthContext가 세션을 감지하여 자동으로 (tabs)로 리디렉트하므로
-        // 수동 네비게이션 없이 환영 메시지만 표시
         Alert.alert('가입 완료', '나아포에 오신 걸 환영해요!');
       } else {
-        // Confirm email ON → 이메일 인증 필요
         Alert.alert(
           '인증 메일 발송 📧',
           '이메일 인증 후 로그인해주세요.',
@@ -96,108 +131,147 @@ export default function SignupScreen() {
       }
 
     } catch (err) {
-      // 네트워크 오류 등 런타임 에러
       console.error('[Signup] Unexpected error:', err);
       Alert.alert('오류', '네트워크 연결을 확인하고 다시 시도해주세요.');
     } finally {
-      // 성공/실패/에러 모든 경우에 로딩 해제 보장
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={['#3A7AB0', '#1A4068', '#0F2840', '#0A1A2E']}
+      locations={[0, 0.35, 0.70, 1]}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView
-        contentContainerStyle={styles.inner}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <OceanBubbles variant="home" />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* 딥링크 등 진입 경로와 무관하게 로그인 화면으로 명확히 이동 */}
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.replace('/(auth)/login')}
+        <ScrollView
+          contentContainerStyle={styles.inner}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.backText}>← 돌아가기</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title}>회원가입</Text>
-        <Text style={styles.subtitle}>나아포와 함께 건강을 기록해요</Text>
-
-        <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="닉네임"
-            placeholderTextColor={Colors.textLight}
-            value={nickname}
-            onChangeText={setNickname}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="next"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="이메일"
-            placeholderTextColor={Colors.textLight}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="emailAddress"
-            returnKeyType="next"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="비밀번호 (6자 이상)"
-            placeholderTextColor={Colors.textLight}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="newPassword"
-            returnKeyType="next"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="비밀번호 확인"
-            placeholderTextColor={Colors.textLight}
-            value={passwordConfirm}
-            onChangeText={setPasswordConfirm}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="newPassword"
-            returnKeyType="done"
-            onSubmitEditing={handleSignup}
-          />
-
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleSignup}
-            disabled={loading}
+            style={styles.backButton}
+            onPress={() => router.replace('/(auth)/login')}
           >
-            <Text style={styles.buttonText}>
-              {loading ? '가입 중...' : '회원가입'}
-            </Text>
+            <Text style={styles.backText}>← 돌아가기</Text>
           </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          <Text style={styles.title}>회원가입</Text>
+          <Text style={styles.subtitle}>나아포와 함께 건강을 기록해요</Text>
+
+          <View style={styles.form}>
+            <GlassInput
+              placeholder="닉네임"
+              value={nickname}
+              onChangeText={setNickname}
+              returnKeyType="next"
+            />
+            <GlassInput
+              placeholder="이메일"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              returnKeyType="next"
+            />
+            <GlassInput
+              placeholder="비밀번호 (6자 이상)"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              textContentType="newPassword"
+              returnKeyType="next"
+            />
+            <GlassInput
+              placeholder="비밀번호 확인"
+              value={passwordConfirm}
+              onChangeText={setPasswordConfirm}
+              secureTextEntry
+              textContentType="newPassword"
+              returnKeyType="done"
+              onSubmitEditing={handleSignup}
+            />
+
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleSignup}
+              disabled={loading}
+            >
+              <LinearGradient
+                colors={['#5A9FE9', '#2E6BBF', '#1A4FA8']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.buttonGradient}
+              >
+                <Text style={styles.buttonText}>
+                  {loading ? '가입 중...' : '회원가입'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
+// ── GlassInput 스타일 ─────────────────────────────────────
+const input = StyleSheet.create({
+  wrapper: {
+    width: '100%',
+    height: 54,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: T.inputBorder,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  blur: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: T.inputBg,
+  },
+  shine: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  field: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 16,
+    fontSize: 15,
+    fontWeight: '500',
+    color: T.text,
+    zIndex: 1,
+  },
+});
+
+// ── 화면 스타일 ───────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   inner: {
     flexGrow: 1,
-    paddingHorizontal: 32,
+    paddingHorizontal: 28,
     paddingTop: 60,
     paddingBottom: 40,
   },
@@ -205,46 +279,50 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   backText: {
-    color: Colors.primary,
+    color: T.secondary,
     fontSize: 16,
+    fontWeight: '600',
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: Colors.text,
+    fontWeight: '800',
+    color: T.text,
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 14,
-    color: Colors.textLight,
-    marginBottom: 40,
+    color: T.textMuted,
+    marginBottom: 36,
+    fontWeight: '500',
   },
   form: {
     gap: 12,
   },
-  input: {
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: Colors.text,
-  },
   button: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
+    width: '100%',
+    height: 54,
+    borderRadius: 16,
+    overflow: 'hidden',
     marginTop: 8,
+    shadowColor: '#1A4FA8',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  buttonGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.45,
   },
   buttonText: {
-    color: Colors.white,
+    color: '#EAF4FF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
 });

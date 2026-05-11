@@ -32,8 +32,8 @@ const APO = {
 } as const;
 
 const T = {
-  text:      '#EAF4FF',
-  textMuted: '#A4C2DB',
+  text:      '#FFFFFF',
+  textMuted: '#C8DFEF',
   secondary: '#7EC8E3',
 };
 
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   textUser: {
     fontSize: 15,
     lineHeight: 23,
-    color: '#EAF4FF',
+    color: '#FFFFFF',
     fontWeight: '600',
     letterSpacing: -0.1,
   },

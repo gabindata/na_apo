@@ -9,7 +9,6 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Colors } from '../../constants/colors';
 
 const THUMB_SIZE = 32;
 const TRACK_HEIGHT = 8;
@@ -32,12 +31,13 @@ function clampStep(v: number): number {
   return Math.min(STEPS, Math.max(0, n));
 }
 
+/** 어두운 배경에서 잘 보이는 단계별 색상 */
 function heatTint(step: number): string {
-  if (step <= 0) return Colors.heatmap.none;
-  if (step <= 3) return Colors.heatmap.low;
-  if (step <= 6) return Colors.heatmap.mid;
-  if (step <= 8) return Colors.heatmap.high;
-  return Colors.heatmap.severe;
+  if (step <= 0) return 'rgba(168,216,234,0.35)';
+  if (step <= 3) return '#7EC8E3';   // 파랑 (낮음)
+  if (step <= 6) return '#5A9FE9';   // 진파랑 (보통)
+  if (step <= 8) return '#E8A050';   // 주황 (높음)
+  return '#E05555';                  // 빨강 (심각)
 }
 
 export function IntensitySlider({
@@ -119,6 +119,8 @@ export function IntensitySlider({
   const a11yLabel =
     accessibilityLabel ?? `${label}, 현재 ${step}단계, 0에서 10 사이`;
 
+  const tint = heatTint(step);
+
   return (
     <View
       testID={testID}
@@ -135,8 +137,9 @@ export function IntensitySlider({
     >
       <View style={styles.headerRow}>
         <Text style={styles.label}>{label}</Text>
-        <View style={[styles.badge, { borderColor: heatTint(step) }]}>
-          <Text style={[styles.badgeText, { color: heatTint(step) }]}>
+        {/* 배지: 글래스 필 + heat 색상 테두리 */}
+        <View style={[styles.badge, { borderColor: tint }]}>
+          <Text style={[styles.badgeText, { color: tint }]}>
             {step}
           </Text>
         </View>
@@ -156,7 +159,7 @@ export function IntensitySlider({
             styles.trackFill,
             {
               width: fillW,
-              backgroundColor: step > 0 ? heatTint(step) : 'transparent',
+              backgroundColor: step > 0 ? tint : 'transparent',
             },
           ]}
         />
@@ -166,8 +169,8 @@ export function IntensitySlider({
             styles.thumb,
             {
               left: thumbLeft,
-              borderColor: Colors.primary,
-              backgroundColor: Colors.white,
+              borderColor: tint,
+              backgroundColor: '#ffffff',
             },
           ]}
         />
@@ -198,7 +201,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.text,
+    color: '#FFFFFF',
     letterSpacing: -0.2,
   },
   badge: {
@@ -207,7 +210,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 14,
     borderWidth: 2,
-    backgroundColor: Colors.white,
+    backgroundColor: 'rgba(120,175,220,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -219,7 +222,7 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textLight,
+    color: 'rgba(210,235,250,0.90)',
     marginBottom: 10,
   },
   trackHit: {
@@ -230,9 +233,9 @@ const styles = StyleSheet.create({
   trackBg: {
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
-    backgroundColor: Colors.ocean.heroWashDeep,
+    backgroundColor: 'rgba(168,216,234,0.22)',
     borderWidth: 1,
-    borderColor: Colors.ocean.tideBorder,
+    borderColor: 'rgba(168,216,234,0.30)',
   },
   trackFill: {
     position: 'absolute',
@@ -247,12 +250,12 @@ const styles = StyleSheet.create({
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
     top: (HIT_HEIGHT - THUMB_SIZE) / 2,
-    borderWidth: 2,
-    shadowColor: Colors.accent,
-    shadowOpacity: 0.12,
+    borderWidth: 2.5,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    elevation: 4,
   },
   scaleRow: {
     flexDirection: 'row',
@@ -263,6 +266,6 @@ const styles = StyleSheet.create({
   scaleText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.textLight,
+    color: 'rgba(210,235,250,0.88)',
   },
 });
