@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Keyboard,
   KeyboardAvoidingView,
   LayoutChangeEvent,
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,10 +18,20 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { ChatBubble } from '../../components/common/ChatBubble';
 import { OceanBubbles } from '../../components/ocean/OceanBubbles';
 import { floatingTabBarOverlayClearance } from '../../constants/tabBar';
 import { sendMessage, type Message as ApiMessage } from '../../lib/claude';
+import {
+  createApoConversation,
+  saveApoMessage,
+  fetchApoConversations,
+  fetchApoMessages,
+  deleteApoConversation,
+  type ApoConversation,
+  type ApoMessage,
+} from '../../lib/apoConversations';
 
 const H_PAD = 18;
 const COMPOSER_MIN_HEIGHT = 44;
@@ -59,6 +72,12 @@ export default function ApoScreen() {
   const [composerHeight, setComposerHeight] = useState(0);
   const [guideExpanded, setGuideExpanded] = useState(true);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [conversations, setConversations] = useState<ApoConversation[]>([]);
+  const [detailConv, setDetailConv] = useState<{ conv: ApoConversation; messages: ApoMessage[] } | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const currentConvIdRef = useRef<string | null>(null);
 
   const messagesRef  = useRef<ChatMessage[]>([...WELCOME_MESSAGES]);
   const apiHistory   = useRef<ApiMessage[]>([]);
@@ -117,6 +136,26 @@ export default function ApoScreen() {
     ];
     const currentRequestId = ++requestIdRef.current;
 
+    // 첫 메시지면 대화 생성
+    if (!currentConvIdRef.current) {
+      try {
+        const convId = await createApoConversation(text);
+        currentConvIdRef.current = convId;
+        // 웰컴 메시지 저장
+        const welcome = WELCOME_MESSAGES[0];
+        if (welcome) await saveApoMessage(convId, 'assistant', welcome.text);
+      } catch (e) {
+        console.warn('[Apo] 대화 생성 실패:', e);
+      }
+    }
+
+    // 유저 메시지 저장
+    if (currentConvIdRef.current) {
+      saveApoMessage(currentConvIdRef.current, 'user', text).catch((e) =>
+        console.warn('[Apo] 메시지 저장 실패:', e),
+      );
+    }
+
     try {
       const reply = await sendMessage(nextApiHistory, 'apo');
       if (currentRequestId !== requestIdRef.current) return;
@@ -124,6 +163,13 @@ export default function ApoScreen() {
       const assistantMsg: ChatMessage = { id: createId(), role: 'assistant', text: reply };
       appendUiMessage(assistantMsg);
       apiHistory.current = [...nextApiHistory, { role: 'assistant', content: reply }];
+
+      // 어시스턴트 응답 저장
+      if (currentConvIdRef.current) {
+        saveApoMessage(currentConvIdRef.current, 'assistant', reply).catch((e) =>
+          console.warn('[Apo] 응답 저장 실패:', e),
+        );
+      }
     } catch (err) {
       if (currentRequestId !== requestIdRef.current) return;
       console.error('[Apo] Claude API error:', err);
@@ -137,6 +183,7 @@ export default function ApoScreen() {
   const onReset = useCallback(() => {
     requestIdRef.current += 1;
     apiHistory.current = [];
+    currentConvIdRef.current = null;
     messagesRef.current = [...WELCOME_MESSAGES];
     setMessages([...WELCOME_MESSAGES]);
     setDraft('');
@@ -156,6 +203,47 @@ export default function ApoScreen() {
     },
     [messages],
   );
+
+  const openHistory = useCallback(async () => {
+    setHistoryVisible(true);
+    setHistoryLoading(true);
+    try {
+      const list = await fetchApoConversations();
+      setConversations(list);
+    } catch (e) {
+      console.warn('[Apo] 기록 조회 실패:', e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const openDetail = useCallback(async (conv: ApoConversation) => {
+    try {
+      const msgs = await fetchApoMessages(conv.id);
+      setDetailConv({ conv, messages: msgs });
+    } catch (e) {
+      console.warn('[Apo] 메시지 조회 실패:', e);
+    }
+  }, []);
+
+  const onDeleteConversation = useCallback((convId: string) => {
+    Alert.alert('대화 삭제', '이 대화 기록을 삭제할까요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteApoConversation(convId);
+            setConversations((prev) => prev.filter((c) => c.id !== convId));
+            if (detailConv?.conv.id === convId) setDetailConv(null);
+          } catch (e) {
+            console.warn('[Apo] 삭제 실패:', e);
+          }
+        },
+      },
+    ]);
+  }, [detailConv]);
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
   const composerBottomPad = isKeyboardVisible
@@ -178,21 +266,39 @@ export default function ApoScreen() {
           resizeMode="contain"
           accessibilityLabel="나아포"
         />
-        <Pressable
-          onPress={onReset}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="새 대화 시작"
-        >
-          <LinearGradient
-            colors={['rgba(74,144,217,0.30)', 'rgba(46,95,163,0.28)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.resetBtn}
+        <View style={styles.topBarRight}>
+          <Pressable
+            onPress={openHistory}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="대화 기록"
           >
-            <Text style={styles.resetBtnText}>새 대화</Text>
-          </LinearGradient>
-        </Pressable>
+            <LinearGradient
+              colors={['rgba(74,144,217,0.30)', 'rgba(46,95,163,0.28)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.resetBtn}
+            >
+              <Ionicons name="time-outline" size={14} color={T.secondary} />
+              <Text style={styles.resetBtnText}>기록</Text>
+            </LinearGradient>
+          </Pressable>
+          <Pressable
+            onPress={onReset}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="새 대화 시작"
+          >
+            <LinearGradient
+              colors={['rgba(74,144,217,0.30)', 'rgba(46,95,163,0.28)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.resetBtn}
+            >
+              <Text style={styles.resetBtnText}>새 대화</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
       </View>
 
       <KeyboardAvoidingView
@@ -285,6 +391,105 @@ export default function ApoScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* ── 대화 기록 목록 모달 ── */}
+      <Modal
+        visible={historyVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setHistoryVisible(false)}
+      >
+        <LinearGradient
+          colors={['#1A4068', '#0F2840', '#0A1A2E']}
+          style={[styles.modalRoot, { paddingTop: insets.top }]}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>대화 기록</Text>
+            <Pressable
+              onPress={() => { setHistoryVisible(false); setDetailConv(null); }}
+              hitSlop={10}
+              accessibilityLabel="닫기"
+            >
+              <Ionicons name="close" size={22} color={T.textMuted} />
+            </Pressable>
+          </View>
+
+          {detailConv ? (
+            // 상세 뷰
+            <>
+              <View style={styles.detailTopBar}>
+                <Pressable onPress={() => setDetailConv(null)} hitSlop={10}>
+                  <Text style={styles.detailBack}>← 목록</Text>
+                </Pressable>
+                <Pressable onPress={() => onDeleteConversation(detailConv.conv.id)} hitSlop={10}>
+                  <Ionicons name="trash-outline" size={18} color="rgba(220,100,100,0.85)" />
+                </Pressable>
+              </View>
+              <Text style={styles.detailDate}>
+                {new Date(detailConv.conv.created_at).toLocaleString('ko-KR', {
+                  month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                })}
+              </Text>
+              <ScrollView
+                style={styles.flex}
+                contentContainerStyle={styles.detailScroll}
+                showsVerticalScrollIndicator={false}
+              >
+                {detailConv.messages.map((msg) => (
+                  <ChatBubble key={msg.id} role={msg.role === 'assistant' ? 'apo' : 'user'}>
+                    {msg.text}
+                  </ChatBubble>
+                ))}
+              </ScrollView>
+            </>
+          ) : (
+            // 목록 뷰
+            historyLoading ? (
+              <View style={styles.centered}>
+                <ActivityIndicator size="large" color={T.secondary} />
+              </View>
+            ) : conversations.length === 0 ? (
+              <View style={styles.centered}>
+                <Text style={styles.emptyText}>저장된 대화가 없어요.</Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.flex}
+                contentContainerStyle={styles.historyList}
+                showsVerticalScrollIndicator={false}
+              >
+                {conversations.map((conv) => (
+                  <Pressable
+                    key={conv.id}
+                    onPress={() => openDetail(conv)}
+                    style={({ pressed }) => [styles.convCard, pressed && { opacity: 0.75 }]}
+                  >
+                    <View style={styles.convCardInner}>
+                      <View style={styles.convCardTextWrap}>
+                        <Text style={styles.convPreview} numberOfLines={2}>
+                          {conv.preview}
+                        </Text>
+                        <Text style={styles.convDate}>
+                          {new Date(conv.created_at).toLocaleString('ko-KR', {
+                            month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                          })}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => onDeleteConversation(conv.id)}
+                        hitSlop={10}
+                        accessibilityLabel="대화 삭제"
+                      >
+                        <Ionicons name="trash-outline" size={17} color="rgba(200,90,90,0.75)" />
+                      </Pressable>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )
+          )}
+        </LinearGradient>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -311,17 +516,116 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 10,
   },
+  topBarRight: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   resetBtn: {
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderWidth: 1,
     borderColor: 'rgba(126,200,227,0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   resetBtnText: {
     fontSize: 13,
     fontWeight: '700',
     color: T.secondary,
+  },
+
+  // 모달
+  modalRoot: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: H_PAD,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(168,216,234,0.18)',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: T.text,
+    letterSpacing: -0.3,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 15,
+    color: T.textMuted,
+    fontWeight: '500',
+  },
+  historyList: {
+    paddingHorizontal: H_PAD,
+    paddingTop: 12,
+    paddingBottom: 40,
+    gap: 10,
+  },
+  convCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,234,0.22)',
+    backgroundColor: 'rgba(120,175,220,0.13)',
+    overflow: 'hidden',
+  },
+  convCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  convCardTextWrap: {
+    flex: 1,
+    gap: 5,
+  },
+  convPreview: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: T.text,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
+  convDate: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: T.textMuted,
+  },
+
+  // 상세 뷰
+  detailTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: H_PAD,
+    paddingVertical: 10,
+  },
+  detailBack: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: T.secondary,
+  },
+  detailDate: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: T.textMuted,
+    paddingHorizontal: H_PAD,
+    marginBottom: 8,
+  },
+  detailScroll: {
+    paddingHorizontal: H_PAD,
+    paddingBottom: 40,
+    paddingTop: 4,
   },
 
   // 가이드 블록
