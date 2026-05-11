@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   LayoutChangeEvent,
   Platform,
@@ -57,6 +58,7 @@ export default function ApoScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [composerHeight, setComposerHeight] = useState(0);
   const [guideExpanded, setGuideExpanded] = useState(true);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   const messagesRef  = useRef<ChatMessage[]>([...WELCOME_MESSAGES]);
   const apiHistory   = useRef<ApiMessage[]>([]);
@@ -65,6 +67,14 @@ export default function ApoScreen() {
   const canSend = draft.trim().length > 0 && !isLoading;
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => { listRef.current?.scrollToEnd({ animated: true }); });
@@ -148,7 +158,9 @@ export default function ApoScreen() {
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
-  const composerBottomPad = floatingTabBarOverlayClearance(insets.bottom);
+  const composerBottomPad = isKeyboardVisible
+    ? 10
+    : floatingTabBarOverlayClearance(insets.bottom);
 
   return (
     <LinearGradient
@@ -186,7 +198,7 @@ export default function ApoScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+        keyboardVerticalOffset={0}
       >
         {/* 가이드 블록 */}
         <Pressable

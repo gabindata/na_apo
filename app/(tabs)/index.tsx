@@ -69,6 +69,60 @@ function SectionTitle({ label, accessory, onAccessory }: {
 
 const HEAT_PREVIEW_KEYS = ['none', 'low', 'mid', 'high', 'severe'] as const;
 
+// ── 개인화 인사말 ─────────────────────────────────────────
+function getPersonalizedGreeting(topBodyPart: string | undefined, seed: number): string {
+  const hour = new Date().getHours();
+
+  let pool: string[];
+  if (hour >= 5 && hour < 11) {
+    pool = [
+      '오늘 잠은 잘 주무셨나요?',
+      '좋은 아침이에요!',
+      '오늘도 건강한 하루 되세요.',
+      '아침 스트레칭은 하셨나요?',
+      '오늘 아침 몸 상태는 어떠세요?',
+    ];
+  } else if (hour >= 11 && hour < 14) {
+    pool = [
+      '오늘 스트레칭은 하셨나요?',
+      '점심 식사 잘 드셨나요?',
+      '잠깐 허리 펴고\n스트레칭 한번 해보세요!',
+      '오전은 몸이 괜찮으셨나요?',
+    ];
+  } else if (hour >= 14 && hour < 18) {
+    pool = [
+      '지금 자세 좋은지 한번 확인해보세요.',
+      '몸이 뻐근하다면 잠깐 쉬어가세요.',
+      '오늘 물은 충분히 드셨나요?',
+      '오후에도 통증은 없으신가요?',
+    ];
+  } else if (hour >= 18 && hour < 22) {
+    pool = [
+      '오늘 하루 수고 많으셨어요.\n몸 상태는 괜찮으신가요?',
+      '저녁 이후엔 몸을 따뜻하게 하세요.',
+      '오늘 하루 어떠셨나요?\n통증을 기록해두세요.',
+      '퇴근 후엔 가볍게 스트레칭 어때요?',
+    ];
+  } else {
+    pool = [
+      '내일을 위한 충분한 휴식을 취하세요.',
+      '오늘 하루도 고생하셨어요.',
+      '몸이 피곤하다면 통증을 기록하고 쉬어요.',
+      '오늘 하루 몸 상태는 어떠셨나요?',
+    ];
+  }
+
+  if (topBodyPart) {
+    pool = [
+      ...pool,
+      `최근 ${topBodyPart} 기록이 많았어요.\n오늘은 어떠신가요?`,
+      `${topBodyPart} 통증, 오늘은 좀 나아졌나요?`,
+    ];
+  }
+
+  return pool[seed % pool.length];
+}
+
 // ── HomeScreen ────────────────────────────────────────────
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -85,6 +139,7 @@ export default function HomeScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [shopVisible, setShopVisible]   = useState(false);
   const [detailDateKey, setDetailDateKey] = useState<string | null>(null);
+  const [greetingSeed] = useState(() => Math.floor(Math.random() * 100));
 
   useEffect(() => {
     let mounted = true;
@@ -161,19 +216,24 @@ export default function HomeScreen() {
       style={[styles.root, { paddingTop: insets.top }]}
     >
       <OceanBubbles variant="home" />
-      {/* 설정 버튼 */}
-      <Pressable
-        style={({ pressed }) => [
-          styles.settingsBtn,
-          { top: insets.top + 6 },
-          pressed && { opacity: 0.7 },
-        ]}
-        onPress={() => router.push('/settings')}
-        accessibilityLabel="설정"
-        hitSlop={12}
-      >
-        <Ionicons name="settings-outline" size={22} color="rgba(168,216,234,0.85)" />
-      </Pressable>
+
+      {/* ── Top Bar ── */}
+      <View style={styles.topBar}>
+        <Image
+          source={require('../../assets/logo/naapo_typo_logo_white.png')}
+          style={styles.topBarLogo}
+          resizeMode="contain"
+          accessibilityLabel="나아포"
+        />
+        <Pressable
+          style={({ pressed }) => [styles.settingsBtn, pressed && { opacity: 0.7 }]}
+          onPress={() => router.push('/settings')}
+          accessibilityLabel="설정"
+          hitSlop={12}
+        >
+          <Ionicons name="settings-outline" size={22} color="rgba(168,216,234,0.85)" />
+        </Pressable>
+      </View>
 
       <ScrollView
         style={styles.scroll}
@@ -185,16 +245,16 @@ export default function HomeScreen() {
       >
         {/* ── Hero ──────────────────────────────────────── */}
         <View style={styles.hero}>
-          <Text style={styles.heroGreeting}>
-            안녕하세요, {profile?.nickname ?? ''}님
+          <Text style={styles.heroName} numberOfLines={1}>
+            안녕하세요, {profile?.nickname ?? ''}님!
           </Text>
-          <Image
-            source={require('../../assets/logo/naapo_typo_logo_white.png')}
-            style={styles.heroLogo}
-            resizeMode="contain"
-            accessibilityLabel="나아포"
-          />
-          <Text style={styles.heroTagline}>오늘의 통증을 기록해보아요.</Text>
+          <Text
+            style={styles.heroGreeting}
+            lineBreakStrategyIOS="hangul-word"
+            textBreakStrategy="balanced"
+          >
+            {getPersonalizedGreeting(stats?.topBodyPart, greetingSeed)}
+          </Text>
         </View>
 
         {/* ── 프로필 ───────────────────────────────────── */}
@@ -302,7 +362,7 @@ export default function HomeScreen() {
         </Pressable>
 
         {/* ── 통증 기록 캘린더 ─────────────────────────── */}
-        <SectionTitle label="통증 기록 캘린더" accessory="이번 달" />
+        <SectionTitle label="통증 기록 캘린더" />
         <GlassCard style={styles.sectionCard}>
           <Text style={styles.heatmapLegendLabel}>이번 달 강도 미리보기</Text>
           <View style={styles.heatmapStrip}>
@@ -428,10 +488,21 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  // Top Bar
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: H_PAD,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(168,216,234,0.18)',
+  },
+  topBarLogo: {
+    width: 96,
+    height: 30,
+  },
   settingsBtn: {
-    position: 'absolute',
-    right: H_PAD,
-    zIndex: 30,
     width: 38,
     height: 38,
     borderRadius: 12,
@@ -444,32 +515,28 @@ const styles = StyleSheet.create({
   scroll:  { flex: 1 },
   scrollContent: {
     paddingHorizontal: H_PAD,
-    paddingTop: 8,
+    paddingTop: 4,
   },
 
   // Hero
   hero: {
-    paddingTop: 10,
-    paddingBottom: 26,
+    paddingTop: 20,
+    paddingBottom: 24,
     paddingLeft: 4,
   },
-  heroGreeting: {
-    fontSize: 11,
+  heroName: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#C8DFF0',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    color: T.secondary,
+    letterSpacing: 0.2,
     marginBottom: 6,
   },
-  heroLogo: {
-    width: 150,
-    height: 48,
-    marginBottom: 6,
-  },
-  heroTagline: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(210,232,248,0.88)',
+  heroGreeting: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.88)',
+    letterSpacing: -0.3,
+    lineHeight: 26,
   },
 
   // 공통 카드 간격
