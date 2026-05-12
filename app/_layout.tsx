@@ -13,7 +13,7 @@ applyGlobalFont();
 const PUBLIC_GROUPS = ['(auth)'];
 
 function RootLayoutNav() {
-  const { session, loading } = useAuth();
+  const { session, loading, needsOnboarding, onboardingChecked } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -21,20 +21,23 @@ function RootLayoutNav() {
   const [fontsLoaded] = useFonts(FONT_ASSETS);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !onboardingChecked) return;
 
     const inPublicGroup = PUBLIC_GROUPS.includes(segments[0] as string);
+    const onOnboarding = segments[0] === 'onboarding';
     const isAuthenticated = !!session;
 
     if (!isAuthenticated && !inPublicGroup) {
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inPublicGroup) {
-      router.replace('/(tabs)');
+      router.replace(needsOnboarding ? '/onboarding' : '/(tabs)');
+    } else if (isAuthenticated && !inPublicGroup && !onOnboarding && needsOnboarding) {
+      router.replace('/onboarding');
     }
-  }, [session, loading, segments, router]);
+  }, [session, loading, onboardingChecked, needsOnboarding, segments, router]);
 
-  // 인증 로딩 중 or 폰트 미로드 → 스플래시
-  if (loading || !fontsLoaded) {
+  // 인증 로딩 중 or 온보딩 체크 중 or 폰트 미로드 → 스플래시
+  if (loading || !onboardingChecked || !fontsLoaded) {
     return (
       <View style={styles.splash}>
         <Image
@@ -55,6 +58,7 @@ function RootLayoutNav() {
       <Stack.Screen name="report" options={{ headerShown: false }} />
       <Stack.Screen name="magazine/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="care" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
     </Stack>
   );
 }

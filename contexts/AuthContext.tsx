@@ -6,6 +6,9 @@ type AuthContextType = {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  needsOnboarding: boolean;
+  onboardingChecked: boolean;
+  refreshOnboardingStatus: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -15,6 +18,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   useEffect(() => {
     // 1. onAuthStateChange를 먼저 등록
@@ -49,6 +54,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // birth_year null이면 온보딩 필요 → 세션 변경 시마다 체크
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setNeedsOnboarding(false);
+      setOnboardingChecked(true);
+      return;
+    }
+    setOnboardingChecked(false);
+    supabase
+      .from('users')
+      .select('birth_year')
+      .eq('id', userId)
+      .single()
+      .then(({ data }) => {
+        setNeedsOnboarding(data?.birth_year == null);
+        setOnboardingChecked(true);
+      });
+  }, [session?.user?.id]);
+
+  const refreshOnboardingStatus = async () => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    const { data } = await supabase
+      .from('users')
+      .select('birth_year')
+      .eq('id', userId)
+      .single();
+    setNeedsOnboarding(data?.birth_year == null);
+  };
+
   const signOut = async () => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -64,8 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         session,
-        user: session?.user ?? null, // session에서 직접 계산 → 불일치 방지
+        user: session?.user ?? null,
         loading,
+        needsOnboarding,
+        onboardingChecked,
+        refreshOnboardingStatus,
         signOut,
       }}
     >
