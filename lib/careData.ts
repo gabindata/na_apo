@@ -78,97 +78,102 @@ export type ParsedCare = {
   cards: CardData[];
 };
 
-// ── 폴백 ───────────────────────────────────────────────────
-export const FALLBACK_CARE: ParsedCare = {
-  summary: '아직 기록이 부족해서 기본 케어 루틴으로 시작해볼게요.',
-  cards: [
-    {
-      category: 'stretch',
-      title: '가벼운 이완',
-      preview: '목과 어깨를 천천히 풀어주는 3분 루틴을 추천드려요.',
-      cta: '이완하기',
-      detail: {
-        why: '아직 통증 기록이 충분하지 않아 누구나 부담 없이 할 수 있는 기본 루틴을 준비했어요.',
-        recommendation: '무리한 동작보다 목, 어깨, 허리를 천천히 풀어주는 가벼운 이완부터 시작해보세요.',
-        steps: [
-          '어깨를 앞뒤로 천천히 10번씩 돌리기',
-          '목을 좌우로 천천히 기울이며 10초씩 유지하기',
-          '허리를 곧게 펴고 깊게 숨 쉬기',
-        ],
-        apoMessage: '처음부터 무리하지 말고, 몸이 편안해지는 정도만 해도 충분해요.',
+function buildLocalCareFromSummary(summary: CareSummary): ParsedCare {
+  const part = summary.topBodyPart ?? '몸';
+  const hasSleepIssue =
+    summary.shortSleepDays >= 1 ||
+    (summary.avgSleepHours != null && summary.avgSleepHours < 6);
+
+  const hasStress = summary.emotionBad >= 1;
+  const hasHighPain = summary.highIntensityDays >= 1;
+
+  return {
+    summary:
+      summary.recordCount > 0
+        ? `최근 ${summary.periodDays}일 동안 ${part} 통증 기록이 보여요. 오늘은 회복과 긴장 완화 중심으로 케어를 준비했어요.`
+        : '아직 기록이 부족해서 기본 케어 루틴으로 시작해볼게요.',
+    cards: [
+      {
+        category: 'stretch',
+        title: `${part} 긴장 완화`,
+        preview: `${part} 주변을 가볍게 풀어주는 짧은 이완 루틴이에요.`,
+        cta: '가볍게 풀기',
+        detail: {
+          why: `최근 ${part} 관련 기록이 있어 무리하지 않는 이완 루틴을 추천드려요.`,
+          recommendation: '전문 동작보다 목·어깨·허리를 천천히 풀어주는 가벼운 움직임부터 시작해보세요.',
+          steps: ['어깨 천천히 돌리기', '목 좌우로 가볍게 기울이기'],
+          apoMessage: '아픈 부위를 억지로 움직이지 말고 편안한 범위에서만 해주세요.',
+        },
       },
-    },
-    {
-      category: 'hydration',
-      title: '따뜻한 수분 보충',
-      preview: '따뜻한 물 한 컵으로 하루를 가볍게 시작해보세요.',
-      cta: '수분 체크',
-      detail: {
-        why: '수분 섭취는 피로감과 몸의 긴장 완화에 기본이 되는 루틴이에요.',
-        recommendation: '오늘은 차가운 음료보다 따뜻한 물이나 무카페인 차를 조금씩 자주 마셔보세요.',
-        routine: [
-          '아침에 물 한 컵',
-          '점심 전후 물 한 컵',
-          '저녁에는 카페인 없는 따뜻한 차',
-        ],
-        avoid: ['늦은 시간 카페인', '당이 많은 음료'],
-        apoMessage: '작은 수분 루틴만으로도 몸이 조금 더 편안해질 수 있어요.',
+      {
+        category: 'hydration',
+        title: '수분 보충',
+        preview: hasSleepIssue
+          ? '수면 부족이 있어 따뜻한 수분 보충을 추천드려요.'
+          : '오늘은 물을 조금씩 자주 마셔보세요.',
+        cta: '수분 체크',
+        detail: {
+          why: hasSleepIssue
+            ? '수면이 부족할 때는 몸이 더 쉽게 피로해질 수 있어요.'
+            : '수분 섭취는 기본적인 컨디션 관리에 도움이 될 수 있어요.',
+          recommendation: '차가운 음료보다 따뜻한 물이나 무카페인 차를 추천드려요.',
+          routine: ['아침 물 한 컵', '점심 전후 물 한 컵'],
+          avoid: ['늦은 카페인', '당이 많은 음료'],
+          apoMessage: '작게 자주 마시는 게 좋아요.',
+        },
       },
-    },
-    {
-      category: 'nutrition',
-      title: '기본 회복 식단',
-      preview: '단백질과 마그네슘이 있는 가벼운 식사를 추천드려요.',
-      cta: '식단 보기',
-      detail: {
-        why: '기록이 부족할 때는 부담 없는 회복 식단을 기본으로 추천하는 게 좋아요.',
-        recommendation: '오늘은 소화에 부담이 적고 단백질이 포함된 식사를 해보세요.',
-        foods: ['계란', '두유', '바나나', '견과류', '따뜻한 국물 음식'],
-        avoid: ['과한 당류', '야식', '늦은 카페인'],
-        routine: [
-          '아침: 바나나 + 두유',
-          '점심: 단백질이 있는 따뜻한 식사',
-          '저녁: 자극적이지 않은 가벼운 음식',
-        ],
-        apoMessage: '오늘은 몸을 세게 밀어붙이기보다 천천히 회복하는 쪽이 좋아 보여요.',
+      {
+        category: 'nutrition',
+        title: '오늘의 회복 식단',
+        preview: '단백질과 마그네슘이 있는 가벼운 식단을 추천드려요.',
+        cta: '식단 보기',
+        detail: {
+          why: hasHighPain
+            ? '통증 강도가 높은 기록이 있어 회복 중심 식사가 좋아 보여요.'
+            : '몸에 부담이 적은 영양 루틴으로 컨디션을 도와볼게요.',
+          recommendation: '오늘은 자극적인 음식보다 따뜻하고 단백질이 있는 식사를 추천드려요.',
+          foods: ['계란', '두유', '바나나', '견과류'],
+          avoid: ['늦은 카페인', '과한 당류'],
+          routine: ['아침: 바나나 + 두유', '저녁: 따뜻한 단백질 식사'],
+          apoMessage: '오늘은 몸을 세게 밀어붙이기보다 회복 쪽으로 가보면 좋아요.',
+        },
       },
-    },
-    {
-      category: 'sleep',
-      title: '수면 준비',
-      preview: '자기 전 화면과 카페인을 조금 멀리해보세요.',
-      cta: '수면 루틴',
-      detail: {
-        why: '수면은 통증 민감도와 피로 회복에 큰 영향을 줄 수 있어요.',
-        recommendation: '오늘은 잠들기 1시간 전부터 화면 밝기를 줄이고 몸을 쉬는 모드로 바꿔보세요.',
-        routine: [
-          '취침 1시간 전 화면 줄이기',
-          '따뜻한 물 마시기',
-          '가벼운 호흡 3분',
-        ],
-        avoid: ['늦은 카페인', '침대에서 오래 스마트폰 보기'],
-        apoMessage: '잘 자는 것도 오늘의 중요한 케어예요.',
+      {
+        category: 'sleep',
+        title: '수면 회복',
+        preview: hasSleepIssue
+          ? '최근 수면 부족 기록이 보여요.'
+          : '오늘은 수면 리듬을 가볍게 정리해보세요.',
+        cta: '수면 루틴',
+        detail: {
+          why: hasSleepIssue
+            ? '수면 부족은 통증 민감도와 피로감에 영향을 줄 수 있어요.'
+            : '좋은 수면 루틴은 몸의 회복에 도움이 될 수 있어요.',
+          recommendation: '잠들기 전 화면 밝기를 줄이고 몸을 쉬는 모드로 바꿔보세요.',
+          routine: ['자기 전 화면 줄이기', '가벼운 호흡 3분'],
+          avoid: ['늦은 카페인', '침대에서 오래 스마트폰 보기'],
+          apoMessage: '오늘은 잠을 회복 루틴의 핵심으로 잡아볼게요.',
+        },
       },
-    },
-    {
-      category: 'mind',
-      title: '마음 안정',
-      preview: '짧은 호흡 루틴으로 긴장을 낮춰보세요.',
-      cta: '마음 케어',
-      detail: {
-        why: '마음의 긴장도 몸의 통증 감각에 영향을 줄 수 있어요.',
-        recommendation: '잠깐 멈춰서 호흡을 정리하는 시간을 가져보세요.',
-        steps: [
-          '4초 동안 천천히 들이마시기',
-          '2초 멈추기',
-          '6초 동안 길게 내쉬기',
-          '이 과정을 5번 반복하기',
-        ],
-        apoMessage: '오늘은 마음도 몸처럼 천천히 쉬게 해주세요.',
+      {
+        category: 'mind',
+        title: '마음 안정',
+        preview: hasStress
+          ? '스트레스 기록이 있어 짧은 안정 루틴을 추천드려요.'
+          : '잠깐 멈춰서 호흡을 정리해보세요.',
+        cta: '마음 케어',
+        detail: {
+          why: hasStress
+            ? '스트레스가 몸의 긴장감과 함께 나타날 수 있어요.'
+            : '마음의 여유가 몸의 회복에도 도움이 될 수 있어요.',
+          recommendation: '짧은 호흡 루틴으로 몸과 마음을 같이 낮춰보세요.',
+          steps: ['4초 들이마시기', '6초 천천히 내쉬기'],
+          apoMessage: '오늘은 조금 느리게 가도 괜찮아요.',
+        },
       },
-    },
-  ],
-};
+    ],
+  };
+}
 
 // ── JSON 파서 ──────────────────────────────────────────────
 function safeString(v: unknown, fallback = ''): string {
@@ -209,33 +214,51 @@ function normalizeCard(raw: any): CardData | null {
 
 export function parseCare(raw: string): ParsedCare | null {
   try {
-    const jsonStart = raw.indexOf('{');
-    const jsonEnd = raw.lastIndexOf('}');
+    if (!raw || typeof raw !== 'string') return null;
+
+    const cleaned = raw
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd = cleaned.lastIndexOf('}');
     if (jsonStart === -1 || jsonEnd === -1) return null;
 
-    const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+    const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
 
     const summary = safeString(parsed?.summary);
     const cardsRaw = Array.isArray(parsed?.cards) ? parsed.cards : [];
-    const cards = cardsRaw.map(normalizeCard).filter((c): c is CardData => c !== null);
+    const parsedCards = cardsRaw
+      .map(normalizeCard)
+      .filter((c): c is CardData => c !== null);
+
+    if (!summary || parsedCards.length === 0) return null;
 
     const required: CategoryKey[] = ['stretch', 'hydration', 'nutrition', 'sleep', 'mind'];
-    const hasAllRequired = required.every((key) => cards.some((card) => card.category === key));
 
-    if (!summary || cards.length === 0 || !hasAllRequired) return null;
+    // 빠진 카테고리는 fallback에서 보충
+    const cards = required.map((key) => {
+      return (
+        parsedCards.find((card) => card.category === key) ??
+        FALLBACK_CARE.cards.find((card) => card.category === key)!
+      );
+    });
 
     return {
       summary,
-      cards: required.map((key) => cards.find((card) => card.category === key)!),
+      cards,
     };
-  } catch {
+  } catch (e) {
+    console.warn('[CARE] parseCare error:', e);
     return null;
   }
 }
 
 // ── 캐시 ───────────────────────────────────────────────────
-export const CARE_CACHE_KEY = 'naapo:care-suggestion:v4';
-export const CARE_PERIOD_DAYS = 7;
+export const CARE_CACHE_KEY = 'naapo:care-suggestion:v7';
+export const CARE_PRIMARY_PERIOD_DAYS = 7;
+export const CARE_FALLBACK_PERIOD_DAYS = 30;
 
 export function makeSignature(s: CareSummary, profile?: CareProfile | null): string {
   return [
@@ -268,7 +291,15 @@ export async function loadCareCache(): Promise<CachePayload | null> {
     if (!raw) return null;
 
     const payload = JSON.parse(raw) as CachePayload;
-    if (!payload?.signature || !payload?.care?.summary || !Array.isArray(payload?.care?.cards)) {
+
+    if (
+      !payload?.signature ||
+      !payload?.care ||
+      typeof payload.care.summary !== 'string' ||
+      !Array.isArray(payload.care.cards) ||
+      payload.care.cards.length === 0
+    ) {
+      console.log('[CARE] invalid cache — ignoring');
       return null;
     }
 
@@ -388,83 +419,95 @@ function buildCarePrompt(summary: CareSummary, profile?: CareProfile | null): st
 - 영양 파트는 가장 구체적으로 작성할 것.
 - 사용자가 실제로 오늘 실행할 수 있는 루틴으로 작성할 것.
 - 한국어로 작성할 것.
-- 반드시 JSON만 출력할 것. markdown 금지.
+- 반드시 순수 JSON 객체만 출력할 것.
+- markdown, 설명문, 코드블록을 절대 사용하지 말 것.
+- \`\`\`json 또는 \`\`\` 같은 코드블록을 절대 사용하지 말 것.
+- cards 배열에는 반드시 아래 5개 category를 모두 포함할 것:
+  stretch, hydration, nutrition, sleep, mind
+- category 값은 반드시 위 5개 중 하나만 사용할 것.
+- cards 배열 순서는 반드시 stretch, hydration, nutrition, sleep, mind 순서로 작성할 것.
+- 각 텍스트 필드는 1문장으로 제한해.
+- 각 배열은 최대 2개 항목만 작성해.
+- 전체 응답은 1800자 이내로 작성해.
 
 사용자 기본 정보 (보조 참고용):
 ${buildProfileContext(profile)}
 주의: 연령·성별은 루틴 강도·식단 조정에만 미세하게 참고하세요.
 성별 고정관념 없이, 개인의 통증·수면·감정 기록을 핵심 기준으로 사용하세요.
 
-최근 ${CARE_PERIOD_DAYS}일 기록 요약 (핵심 기준):
+최근 ${summary.periodDays}일 기록 요약 (핵심 기준):
 ${JSON.stringify(summary, null, 2)}
 
-반드시 아래 JSON 형식으로만 답해줘:
+반드시 아래 구조의 순수 JSON만 출력해.
+markdown, 코드블록, 설명문 금지.
+문장은 짧게 작성해.
+각 배열은 최대 2개 항목만 작성해.
 
 {
-  "summary": "최근 기록을 바탕으로 한 짧은 AI 분석 요약. 기록이 없으면 기본 루틴 안내.",
+  "summary": "string",
   "cards": [
     {
       "category": "stretch",
-      "title": "스트레칭 제목",
-      "preview": "카드에 보일 짧은 미리보기",
-      "cta": "버튼 문구",
+      "title": "string",
+      "preview": "string",
+      "cta": "string",
       "detail": {
-        "why": "왜 이 추천을 하는지",
-        "recommendation": "오늘의 핵심 추천",
-        "steps": ["간단한 실행 방법 1", "간단한 실행 방법 2", "간단한 실행 방법 3"],
-        "apoMessage": "아포의 짧은 한마디"
+        "why": "string",
+        "recommendation": "string",
+        "steps": ["string", "string"],
+        "apoMessage": "string"
       }
     },
     {
       "category": "hydration",
-      "title": "수분 제목",
-      "preview": "카드에 보일 짧은 미리보기",
-      "cta": "버튼 문구",
+      "title": "string",
+      "preview": "string",
+      "cta": "string",
       "detail": {
-        "why": "왜 이 추천을 하는지",
-        "recommendation": "오늘의 핵심 추천",
-        "routine": ["수분 루틴 1", "수분 루틴 2", "수분 루틴 3"],
-        "avoid": ["피하면 좋은 것 1", "피하면 좋은 것 2"],
-        "apoMessage": "아포의 짧은 한마디"
+        "why": "string",
+        "recommendation": "string",
+        "routine": ["string", "string"],
+        "avoid": ["string"],
+        "apoMessage": "string"
       }
     },
     {
       "category": "nutrition",
-      "title": "영양 제목",
-      "preview": "카드에 보일 짧은 미리보기",
-      "cta": "버튼 문구",
+      "title": "string",
+      "preview": "string",
+      "cta": "string",
       "detail": {
-        "why": "왜 이 식단을 추천하는지",
-        "recommendation": "오늘의 식단 방향",
-        "foods": ["추천 음식 1", "추천 음식 2", "추천 음식 3", "추천 음식 4"],
-        "avoid": ["피하면 좋은 음식 1", "피하면 좋은 음식 2"],
-        "routine": ["아침 추천", "점심 추천", "저녁 추천"],
-        "apoMessage": "아포의 짧은 한마디"
+        "why": "string",
+        "recommendation": "string",
+        "foods": ["string", "string"],
+        "avoid": ["string"],
+        "routine": ["string", "string"],
+        "apoMessage": "string"
       }
     },
     {
       "category": "sleep",
-      "title": "수면 제목",
-      "preview": "카드에 보일 짧은 미리보기",
-      "cta": "버튼 문구",
+      "title": "string",
+      "preview": "string",
+      "cta": "string",
       "detail": {
-        "why": "왜 이 추천을 하는지",
-        "recommendation": "오늘의 수면 루틴 방향",
-        "routine": ["수면 루틴 1", "수면 루틴 2", "수면 루틴 3"],
-        "avoid": ["피하면 좋은 것 1", "피하면 좋은 것 2"],
-        "apoMessage": "아포의 짧은 한마디"
+        "why": "string",
+        "recommendation": "string",
+        "routine": ["string", "string"],
+        "avoid": ["string"],
+        "apoMessage": "string"
       }
     },
     {
       "category": "mind",
-      "title": "마음 제목",
-      "preview": "카드에 보일 짧은 미리보기",
-      "cta": "버튼 문구",
+      "title": "string",
+      "preview": "string",
+      "cta": "string",
       "detail": {
-        "why": "왜 이 추천을 하는지",
-        "recommendation": "오늘의 마음 케어 방향",
-        "steps": ["실행 방법 1", "실행 방법 2", "실행 방법 3"],
-        "apoMessage": "아포의 짧은 한마디"
+        "why": "string",
+        "recommendation": "string",
+        "steps": ["string", "string"],
+        "apoMessage": "string"
       }
     }
   ]
@@ -476,28 +519,99 @@ ${JSON.stringify(summary, null, 2)}
 export async function fetchCareData(
   profile?: CareProfile | null,
 ): Promise<{ summary: CareSummary; care: ParsedCare }> {
-  const summary = await fetchRecentCareSummary(CARE_PERIOD_DAYS);
+  // 1. 최근 7일 기록 우선 조회
+  let summary = await fetchRecentCareSummary(7);
+
+  // 2. 최근 7일 기록이 없으면 최근 30일 기록 사용
+  if (summary.recordCount === 0) {
+    console.log('[CARE] no recent 7-day records — trying 30-day fallback');
+
+    const fallbackSummary = await fetchRecentCareSummary(30);
+
+    if (fallbackSummary.recordCount > 0) {
+      console.log('[CARE] using 30-day personalized care fallback');
+      summary = fallbackSummary;
+    }
+  }
+
+  console.log('[CARE] recordCount:', summary.recordCount);
+  console.log('[CARE] topBodyPart:', summary.topBodyPart, 'x', summary.topBodyPartCount);
+  console.log('[CARE] avgIntensity:', summary.avgIntensity, 'highDays:', summary.highIntensityDays);
+  console.log('[CARE] avgSleep:', summary.avgSleepHours, 'shortDays:', summary.shortSleepDays);
+  console.log(
+    '[CARE] emotion good/normal/bad:',
+    summary.emotionGood,
+    summary.emotionNormal,
+    summary.emotionBad,
+  );
+  console.log('[CARE] painTypes:', summary.painTypes);
+
   const signature = makeSignature(summary, profile);
+  console.log('[CARE] signature:', signature);
 
   const cached = await loadCareCache();
+
   if (cached && cached.signature === signature) {
+    console.log('[CARE] cache HIT — returning cached care');
     return { summary, care: cached.care };
   }
 
-  const prompt = buildCarePrompt(summary, profile);
+  // 3. 진짜 기록이 하나도 없을 때만 기본 fallback care 사용
+  if (summary.recordCount === 0) {
+    console.log('[CARE] absolutely no records — using FALLBACK_CARE');
 
-  const reply = await sendMessage(
-    [{ role: 'user', content: prompt }],
-    'care-suggestion',
-  );
+    return {
+      summary,
+      care: FALLBACK_CARE,
+    };
+  }
 
-  const care = parseCare(reply) ?? FALLBACK_CARE;
+  console.log('[CARE] cache MISS — calling Claude');
 
-  await saveCareCache({
-    signature,
-    care,
-    savedAt: Date.now(),
-  });
+  try {
+    const prompt = buildCarePrompt(summary, profile);
 
-  return { summary, care };
+    const reply = await sendMessage(
+      [{ role: 'user', content: prompt }],
+      'care-suggestion',
+    );
+
+    const care = parseCare(reply);
+
+    if (care) {
+      console.log('[CARE] Claude parse OK — caching and returning');
+
+      await saveCareCache({
+        signature,
+        care,
+        savedAt: Date.now(),
+      });
+
+      return { summary, care };
+    }
+
+    // 4. 기록은 있는데 Claude 응답 파싱 실패한 경우
+    // 이때는 절대 FALLBACK_CARE를 쓰면 안 됨.
+    console.warn(
+      '[CARE] Claude parse FAILED — using local personalized care instead. Raw reply:',
+      reply?.slice(0, 200),
+    );
+
+    const localCare = buildLocalCareFromSummary(summary);
+
+    return {
+      summary,
+      care: localCare,
+    };
+  } catch (error) {
+    // 5. Claude 호출 자체가 실패해도 기록 기반 로컬 케어 사용
+    console.warn('[CARE] Claude request FAILED — using local personalized care instead:', error);
+
+    const localCare = buildLocalCareFromSummary(summary);
+
+    return {
+      summary,
+      care: localCare,
+    };
+  }
 }

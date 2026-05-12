@@ -234,6 +234,9 @@ export async function fetchRecentCareSummary(days: number = 7): Promise<CareSumm
   const userId = await requireUserId();
   const { startIso, endIso } = recentRangeIso(days);
 
+  console.log('[CARE SUMMARY] userId:', userId);
+  console.log('[CARE SUMMARY] range:', startIso, '~', endIso);
+
   const { data, error } = await supabase
     .from('pain_records')
     .select('id, body_part, intensity, pain_type, sleep_hours, emotion, recorded_at')
@@ -242,6 +245,11 @@ export async function fetchRecentCareSummary(days: number = 7): Promise<CareSumm
     .lte('recorded_at', endIso);
 
   if (error) throw error;
+
+  console.log('[CARE SUMMARY] rows fetched:', data?.length ?? 0);
+  if ((data?.length ?? 0) > 0) {
+    console.log('[CARE SUMMARY] sample row:', JSON.stringify(data![0]));
+  }
 
   const rows = (data ?? []) as Pick<
     PainRecord,

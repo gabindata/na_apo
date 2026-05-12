@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -13,13 +13,11 @@ import {
   UIManager,
   View,
 } from 'react-native';
-
-// 모달 헤더(~70) + 버튼(~70) + 패딩(~60) 제외한 스크롤 영역 최대 높이
-const MODAL_SCROLL_MAX_H = Dimensions.get('window').height * 0.86 - 200;
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { OceanBubbles } from '../components/ocean/OceanBubbles';
 import {
   fetchCareData,
@@ -33,6 +31,8 @@ import {
 } from '../lib/careData';
 import { fetchUserProfile } from '../lib/userProfile';
 import { useAuth } from '../contexts/AuthContext';
+
+const MODAL_SCROLL_MAX_H = Dimensions.get('window').height * 0.86 - 200;
 
 if (Platform.OS === 'android') {
   (UIManager as any).setLayoutAnimationEnabledExperimental?.(true);
@@ -51,6 +51,100 @@ const INTRO_LINES = [
   '오늘의 케어를 준비해봤어요 💙',
   '최근 기록을 바탕으로 추천드릴게요.',
 ];
+
+const LOCAL_FALLBACK_CARE: ParsedCare = {
+  summary: '아직 기록이 부족해서 기본 케어 루틴으로 시작해볼게요.',
+  cards: [
+    {
+      category: 'stretch',
+      title: '가벼운 이완',
+      preview: '목과 어깨를 천천히 풀어주는 3분 루틴을 추천드려요.',
+      cta: '이완하기',
+      detail: {
+        why: '아직 통증 기록이 충분하지 않아 누구나 부담 없이 할 수 있는 기본 루틴을 준비했어요.',
+        recommendation: '무리한 동작보다 목, 어깨, 허리를 천천히 풀어주는 가벼운 이완부터 시작해보세요.',
+        steps: ['어깨를 천천히 돌리기', '목을 좌우로 가볍게 기울이기'],
+        apoMessage: '처음부터 무리하지 말고, 몸이 편안해지는 정도만 해도 충분해요.',
+      },
+    },
+    {
+      category: 'hydration',
+      title: '수분 보충',
+      preview: '따뜻한 물 한 컵으로 하루를 가볍게 시작해보세요.',
+      cta: '수분 체크',
+      detail: {
+        why: '수분 섭취는 기본적인 컨디션 관리에 도움이 될 수 있어요.',
+        recommendation: '오늘은 차가운 음료보다 따뜻한 물이나 무카페인 차를 조금씩 마셔보세요.',
+        routine: ['아침에 물 한 컵', '점심 전후 물 한 컵'],
+        avoid: ['늦은 카페인', '당이 많은 음료'],
+        apoMessage: '작게 자주 마시는 게 좋아요.',
+      },
+    },
+    {
+      category: 'nutrition',
+      title: '회복 식단',
+      preview: '단백질과 마그네슘이 있는 가벼운 식사를 추천드려요.',
+      cta: '식단 보기',
+      detail: {
+        why: '몸에 부담이 적은 영양 루틴을 기본으로 추천드려요.',
+        recommendation: '오늘은 자극적인 음식보다 따뜻하고 단백질이 있는 식사를 추천드려요.',
+        foods: ['계란', '두유', '바나나', '견과류'],
+        avoid: ['늦은 카페인', '과한 당류'],
+        routine: ['아침: 바나나 + 두유', '저녁: 따뜻한 단백질 식사'],
+        apoMessage: '오늘은 회복 쪽으로 천천히 가보면 좋아요.',
+      },
+    },
+    {
+      category: 'sleep',
+      title: '수면 준비',
+      preview: '자기 전 화면과 카페인을 조금 멀리해보세요.',
+      cta: '수면 루틴',
+      detail: {
+        why: '수면은 몸의 회복과 컨디션 관리에 도움이 될 수 있어요.',
+        recommendation: '잠들기 전 화면 밝기를 줄이고 몸을 쉬는 모드로 바꿔보세요.',
+        routine: ['자기 전 화면 줄이기', '가벼운 호흡 3분'],
+        avoid: ['늦은 카페인', '침대에서 오래 스마트폰 보기'],
+        apoMessage: '잘 자는 것도 오늘의 중요한 케어예요.',
+      },
+    },
+    {
+      category: 'mind',
+      title: '마음 안정',
+      preview: '짧은 호흡 루틴으로 긴장을 낮춰보세요.',
+      cta: '마음 케어',
+      detail: {
+        why: '마음의 긴장도 몸의 컨디션에 영향을 줄 수 있어요.',
+        recommendation: '잠깐 멈춰서 호흡을 정리하는 시간을 가져보세요.',
+        steps: ['4초 동안 들이마시기', '6초 동안 길게 내쉬기'],
+        apoMessage: '오늘은 조금 느리게 가도 괜찮아요.',
+      },
+    },
+  ],
+};
+
+function getSafeFallbackCare(): ParsedCare {
+  if (
+    FALLBACK_CARE &&
+    typeof FALLBACK_CARE === 'object' &&
+    typeof FALLBACK_CARE.summary === 'string' &&
+    Array.isArray(FALLBACK_CARE.cards) &&
+    FALLBACK_CARE.cards.length > 0
+  ) {
+    return FALLBACK_CARE;
+  }
+
+  return LOCAL_FALLBACK_CARE;
+}
+
+function isValidCare(value: ParsedCare | null | undefined): value is ParsedCare {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof value.summary === 'string' &&
+    Array.isArray(value.cards) &&
+    value.cards.length > 0
+  );
+}
 
 export default function CareScreen() {
   const insets = useSafeAreaInsets();
@@ -80,21 +174,51 @@ export default function CareScreen() {
   const transitionDoneRef = useRef(false);
   const completeFloatRef = useRef<Animated.CompositeAnimation | null>(null);
 
+  const fallbackCare = useMemo(() => getSafeFallbackCare(), []);
+
+  const displayCare = useMemo(() => {
+    return isValidCare(care) ? care : fallbackCare;
+  }, [care, fallbackCare]);
+
+  const allCards = useMemo(() => {
+    return Array.isArray(displayCare?.cards) && displayCare.cards.length > 0
+      ? displayCare.cards
+      : fallbackCare.cards;
+  }, [displayCare, fallbackCare]);
+
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         const userProfile = user?.id ? await fetchUserProfile(user.id) : null;
+
         const profile = userProfile
-          ? { birthYear: userProfile.birthYear, gender: userProfile.gender }
+          ? {
+              birthYear: userProfile.birthYear,
+              gender: userProfile.gender,
+            }
           : null;
-        const { summary: s, care: c } = await fetchCareData(profile);
-        setSummary(s);
-        setCare(c);
-      } catch {
-        setCare(FALLBACK_CARE);
+
+        const result = await fetchCareData(profile);
+
+        if (cancelled) return;
+
+        setSummary(result.summary);
+        setCare(isValidCare(result.care) ? result.care : fallbackCare);
+      } catch (error) {
+        console.warn('[CARE SCREEN] fetch failed:', error);
+
+        if (cancelled) return;
+
+        setCare(fallbackCare);
       }
     })();
-  }, [user?.id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, fallbackCare]);
 
   useEffect(() => {
     const floatLoop = Animated.loop(
@@ -149,18 +273,20 @@ export default function CareScreen() {
   const handleCheck = useCallback((category: CategoryKey) => {
     setChecked((prev) => {
       const next = new Set(prev);
-      if (next.has(category)) next.delete(category);
-      else next.add(category);
+
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+
       return next;
     });
   }, []);
 
-  const displayCare = care ?? FALLBACK_CARE;
-  const allCards = displayCare.cards;
-
   useEffect(() => {
     if (phase !== 'main') return;
-    if (allCards.length === 0) return;
+    if (!Array.isArray(allCards) || allCards.length === 0) return;
     if (checked.size < allCards.length) return;
 
     setPhase('complete');
@@ -204,7 +330,17 @@ export default function CareScreen() {
     return () => {
       completeFloatRef.current?.stop();
     };
-  }, [checked.size, phase, allCards.length]);
+  }, [
+    checked.size,
+    phase,
+    allCards.length,
+    apoCompleteFloat,
+    apoCompleteScale,
+    completeOpacity,
+    completeLine1Opacity,
+    completeLine2Opacity,
+    completeBtnOpacity,
+  ]);
 
   return (
     <LinearGradient
@@ -290,7 +426,9 @@ export default function CareScreen() {
                 <Ionicons name="sparkles" size={13} color={T.secondary} />
                 <Text style={styles.summaryLabel}>아포가 분석한 오늘의 방향</Text>
               </View>
-              <Text style={styles.summaryText}>{displayCare.summary}</Text>
+              <Text style={styles.summaryText}>
+                {displayCare?.summary ?? fallbackCare.summary}
+              </Text>
             </View>
 
             <View style={styles.guideCard}>
@@ -303,7 +441,7 @@ export default function CareScreen() {
             <View style={styles.sectionGrid}>
               {allCards.map((card, index) => (
                 <CareCategoryCard
-                  key={card.category}
+                  key={`${card.category}-${index}`}
                   card={card}
                   isPrimary={index === 0}
                   isChecked={checked.has(card.category)}
@@ -391,7 +529,11 @@ function CareCategoryCard({
   onPress: () => void;
   onCheck: () => void;
 }) {
-  const config = CATEGORY_CONFIG[card.category];
+  const config = CATEGORY_CONFIG?.[card.category] ?? {
+    icon: 'ellipse-outline',
+    label: card.category,
+    description: '',
+  };
 
   return (
     <Pressable
@@ -479,8 +621,18 @@ function CareDetailModal({
 }) {
   if (!card) return null;
 
-  const config = CATEGORY_CONFIG[card.category];
-  const detail = card.detail;
+  const config = CATEGORY_CONFIG?.[card.category] ?? {
+    icon: 'ellipse-outline',
+    label: card.category,
+    description: '',
+  };
+
+  const detail = card.detail ?? {
+    why: '최근 기록을 바탕으로 오늘의 케어를 준비했어요.',
+    recommendation: '오늘은 몸에 부담이 적은 루틴부터 가볍게 시작해보세요.',
+    apoMessage: '오늘도 무리하지 말고 천천히 케어해봐요.',
+  };
+
   const insight = getInsight(summary, card.category);
 
   return (
@@ -489,10 +641,7 @@ function CareDetailModal({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <View style={styles.modalCard}>
-          <LinearGradient
-            colors={['#1A4068', '#0A1A2E']}
-            style={styles.modalGradient}
-          >
+          <LinearGradient colors={['#1A4068', '#0A1A2E']} style={styles.modalGradient}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleWrap}>
                 <View style={styles.modalIconWrap}>
@@ -509,16 +658,28 @@ function CareDetailModal({
               </Pressable>
             </View>
 
-            <ScrollView style={{ maxHeight: MODAL_SCROLL_MAX_H }} showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
+            <ScrollView
+              style={{ maxHeight: MODAL_SCROLL_MAX_H }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScroll}
+            >
               <InfoBox icon="sparkles" label="아포의 분석" text={insight} />
 
               <DetailSection title="왜 추천하나요?" body={detail.why} />
               <DetailSection title="오늘의 추천" body={detail.recommendation} />
 
-              {detail.steps && <BulletSection title="실천 방법" items={detail.steps} />}
-              {detail.foods && <BulletSection title="추천 음식" items={detail.foods} />}
-              {detail.routine && <BulletSection title="오늘의 루틴" items={detail.routine} />}
-              {detail.avoid && <BulletSection title="피하면 좋은 것" items={detail.avoid} />}
+              {Array.isArray(detail.steps) && detail.steps.length > 0 && (
+                <BulletSection title="실천 방법" items={detail.steps} />
+              )}
+              {Array.isArray(detail.foods) && detail.foods.length > 0 && (
+                <BulletSection title="추천 음식" items={detail.foods} />
+              )}
+              {Array.isArray(detail.routine) && detail.routine.length > 0 && (
+                <BulletSection title="오늘의 루틴" items={detail.routine} />
+              )}
+              {Array.isArray(detail.avoid) && detail.avoid.length > 0 && (
+                <BulletSection title="피하면 좋은 것" items={detail.avoid} />
+              )}
 
               <View style={styles.apoMessageBox}>
                 <Image
