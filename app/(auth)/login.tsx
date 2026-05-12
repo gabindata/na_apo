@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Pressable, Image,
   StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView,
@@ -9,6 +9,11 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { OceanBubbles } from '../../components/ocean/OceanBubbles';
 import { supabase } from '../../lib/supabase';
+import {
+  clearSavedLogin,
+  loadSavedLogin,
+  saveSavedLogin,
+} from '../../lib/savedLoginCredentials';
 
 // ── 다크 오션 토큰 ─────────────────────────────────────────
 const G = {
@@ -41,11 +46,15 @@ function GlassInput({
   placeholder, value, onChangeText, secureTextEntry = false,
   keyboardType = 'default' as any,
   iconName, onSubmitEditing, returnKeyType = 'done' as any,
+  textContentType,
+  autoComplete,
 }: {
   placeholder: string; value: string; onChangeText: (v: string) => void;
   secureTextEntry?: boolean; keyboardType?: any;
   iconName: keyof typeof Ionicons.glyphMap;
   onSubmitEditing?: () => void; returnKeyType?: any;
+  textContentType?: ComponentProps<typeof TextInput>['textContentType'];
+  autoComplete?: ComponentProps<typeof TextInput>['autoComplete'];
 }) {
   return (
     <View style={input.wrapper}>
@@ -71,6 +80,8 @@ function GlassInput({
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
           selectionColor={G.secondary}
+          textContentType={textContentType}
+          autoComplete={autoComplete}
         />
       </BlurView>
     </View>
@@ -82,7 +93,22 @@ export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberLogin, setRememberLogin] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const saved = await loadSavedLogin();
+      if (!active || !saved) return;
+      setEmail(saved.email);
+      setPassword(saved.password);
+      setRememberLogin(true);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const canSubmit = email.trim().length > 0 && password.length > 0 && !loading;
 
@@ -100,6 +126,11 @@ export default function LoginScreen() {
         Alert.alert('로그인 실패', parseAuthError(error));
       } else {
         console.log('[Login] 로그인 성공');
+        if (rememberLogin) {
+          await saveSavedLogin(trimmedEmail, password);
+        } else {
+          await clearSavedLogin();
+        }
       }
     } catch (err) {
       console.error('[Login] Unexpected error:', err);
@@ -152,6 +183,8 @@ export default function LoginScreen() {
               keyboardType="email-address"
               iconName="mail-outline"
               returnKeyType="next"
+              textContentType="emailAddress"
+              autoComplete="email"
             />
             <GlassInput
               placeholder="비밀번호"
@@ -161,7 +194,24 @@ export default function LoginScreen() {
               iconName="lock-closed-outline"
               returnKeyType="done"
               onSubmitEditing={handleLogin}
+              textContentType="password"
+              autoComplete="password"
             />
+
+            <Pressable
+              onPress={() => setRememberLogin((v) => !v)}
+              style={({ pressed }) => [styles.rememberRow, pressed && { opacity: 0.85 }]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: rememberLogin }}
+              accessibilityLabel="로그인 정보 저장"
+            >
+              <Ionicons
+                name={rememberLogin ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={rememberLogin ? G.secondary : 'rgba(168,216,234,0.55)'}
+              />
+              <Text style={styles.rememberLabel}>로그인 정보 저장</Text>
+            </Pressable>
 
             {/* 로그인 버튼 */}
             <Pressable
@@ -287,6 +337,22 @@ const styles = StyleSheet.create({
   form: {
     width: '100%',
     gap: 12,
+  },
+
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  rememberLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(210,235,250,0.88)',
+    letterSpacing: -0.1,
   },
 
   // 로그인 버튼

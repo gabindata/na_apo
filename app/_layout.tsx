@@ -20,8 +20,13 @@ function RootLayoutNav() {
   // 폰트 로드 — 로드 완료 전에는 시스템 폰트로 폴백
   const [fontsLoaded] = useFonts(FONT_ASSETS);
 
+  // 폰트·세션 준비 전에도 Stack은 항상 마운트 (스플래시만 덮음).
+  // 예전처럼 스플래시일 때 Stack 자체를 안 그리면 replace 시점에 네비게이터가 없어
+  // "(tabs) was not handled" 경고가 난다.
+  const navigationReady = !loading && onboardingChecked && fontsLoaded;
+
   useEffect(() => {
-    if (loading || !onboardingChecked) return;
+    if (!navigationReady) return;
 
     const inPublicGroup = PUBLIC_GROUPS.includes(segments[0] as string);
     const onOnboarding = segments[0] === 'onboarding';
@@ -34,32 +39,32 @@ function RootLayoutNav() {
     } else if (isAuthenticated && !inPublicGroup && !onOnboarding && needsOnboarding) {
       router.replace('/onboarding');
     }
-  }, [session, loading, onboardingChecked, needsOnboarding, segments, router]);
-
-  // 인증 로딩 중 or 온보딩 체크 중 or 폰트 미로드 → 스플래시
-  if (loading || !onboardingChecked || !fontsLoaded) {
-    return (
-      <View style={styles.splash}>
-        <Image
-          source={require('../assets/logo/logo.png')}
-          style={styles.splashLogo}
-          resizeMode="contain"
-        />
-        <ActivityIndicator size="large" color={Colors.primary} style={styles.splashSpinner} />
-      </View>
-    );
-  }
+  }, [navigationReady, session, needsOnboarding, segments, router]);
 
   return (
-    <Stack initialRouteName="(auth)">
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="settings" options={{ headerShown: false }} />
-      <Stack.Screen name="report" options={{ headerShown: false }} />
-      <Stack.Screen name="magazine/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="care" options={{ headerShown: false }} />
-      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      <Stack initialRouteName="(auth)">
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="report" options={{ headerShown: false }} />
+        <Stack.Screen name="magazine/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="care" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      </Stack>
+
+      {!navigationReady && (
+        <View style={styles.splashOverlay} pointerEvents="auto">
+          <Image
+            source={require('../assets/logo/logo.png')}
+            style={styles.splashLogo}
+            resizeMode="contain"
+          />
+          <ActivityIndicator size="large" color={Colors.primary} style={styles.splashSpinner} />
+        </View>
+      )}
+    </>
   );
 }
 
@@ -74,11 +79,13 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  splash: {
-    flex: 1,
+  splashOverlay: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 9999,
+    elevation: 9999,
   },
   splashLogo: {
     width: 160,
