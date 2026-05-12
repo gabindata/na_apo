@@ -13,15 +13,42 @@ export type ChatbotType =
   | 'report-insight'
   | 'care-suggestion';
 
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 1200;
+/** 초회 + 재시도 횟수(Anthropic 529 overloaded 등 일시 오류 대비) */
+const MAX_RETRIES = 4;
+const RETRY_DELAY_MS = 1800;
+const RETRY_BACKOFF_CAP_MS = 12_000;
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-/** Supabase 일시적 장애인지 판별 — 재시도 가치 있는 에러만 true */
+function errorBodyToSearchString(body: unknown): string {
+  if (body == null) return '';
+  if (typeof body === 'string') return body;
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return String(body);
+  }
+}
+
+/**
+ * Supabase / 상류(Anthropic) 일시 오류인지 판별 — 재시도 가치 있는 경우만 true
+ * Edge Function은 과부하 시 error 문자열에 529 · overloaded_error JSON을 실어 보냄
+ */
 function isRetryable(errorBody: unknown): boolean {
+  const haystack = errorBodyToSearchString(errorBody).toLowerCase();
+
+  if (
+    haystack.includes('overloaded_error') ||
+    haystack.includes('overloaded') ||
+    /\b529\b/.test(haystack) ||
+    haystack.includes('rate_limit') ||
+    haystack.includes('too many requests')
+  ) {
+    return true;
+  }
+
   if (!errorBody || typeof errorBody !== 'object') return false;
   const code = (errorBody as Record<string, unknown>).code;
   const message = String((errorBody as Record<string, unknown>).message ?? '').toLowerCase();
@@ -31,6 +58,11 @@ function isRetryable(errorBody: unknown): boolean {
     message.includes('timeout') ||
     message.includes('service unavailable')
   );
+}
+
+function retryDelayMs(attemptIndex: number): number {
+  const exp = RETRY_DELAY_MS * 2 ** (attemptIndex - 1);
+  return Math.min(exp, RETRY_BACKOFF_CAP_MS);
 }
 
 /**
@@ -45,8 +77,9 @@ export async function sendMessage(
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
-      console.log(`[Claude] 재시도 ${attempt}/${MAX_RETRIES}...`);
-      await sleep(RETRY_DELAY_MS * attempt);
+      const delay = retryDelayMs(attempt);
+      console.log(`[Claude] 재시도 ${attempt}/${MAX_RETRIES} (${delay}ms 후)...`);
+      await sleep(delay);
     }
 
     const { data, error } = await supabase.functions.invoke('chat', {
