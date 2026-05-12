@@ -14,7 +14,7 @@ import { OceanBubbles } from '../../components/ocean/OceanBubbles';
 import { CharacterShop } from '../../components/home/CharacterShop';
 import { DayPainDetailModal } from '../../components/home/DayPainDetailModal';
 import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
-import { CareSuggestionSection } from '../../components/home/CareSuggestionSection';
+import { CareTeaserCard } from '../../components/home/CareTeaserCard';
 import { Colors } from '../../constants/colors';
 import { floatingTabBarOverlayClearance } from '../../constants/tabBar';
 import { getCharacterById } from '../../constants/characters';
@@ -69,7 +69,59 @@ function SectionTitle({ label, accessory, onAccessory }: {
 }
 
 const HEAT_PREVIEW_KEYS = ['none', 'low', 'mid', 'high', 'severe'] as const;
+// ── 개인화 인사말 ─────────────────────────────────────────
+function getPersonalizedGreeting(topBodyPart: string | undefined, seed: number): string {
+  const hour = new Date().getHours();
 
+  let pool: string[];
+  if (hour >= 5 && hour < 11) {
+    pool = [
+      '오늘 잠은 잘 주무셨나요?',
+      '좋은 아침이에요!',
+      '오늘도 건강한 하루 되세요.',
+      '아침 스트레칭은 하셨나요?',
+      '오늘 아침 몸 상태는 어떠세요?',
+    ];
+  } else if (hour >= 11 && hour < 14) {
+    pool = [
+      '오늘 스트레칭은 하셨나요?',
+      '점심 식사 잘 드셨나요?',
+      '잠깐 허리 펴고\n스트레칭 한번 해보세요!',
+      '오전은 몸이 괜찮으셨나요?',
+    ];
+  } else if (hour >= 14 && hour < 18) {
+    pool = [
+      '지금 자세 좋은지 한번 확인해보세요.',
+      '몸이 뻐근하다면 잠깐 쉬어가세요.',
+      '오늘 물은 충분히 드셨나요?',
+      '오후에도 통증은 없으신가요?',
+    ];
+  } else if (hour >= 18 && hour < 22) {
+    pool = [
+      '오늘 하루 수고 많으셨어요.\n몸 상태는 괜찮으신가요?',
+      '저녁 이후엔 몸을 따뜻하게 하세요.',
+      '오늘 하루 어떠셨나요?\n통증을 기록해두세요.',
+      '퇴근 후엔 가볍게 스트레칭 어때요?',
+    ];
+  } else {
+    pool = [
+      '내일을 위한 충분한 휴식을 취하세요.',
+      '오늘 하루도 고생하셨어요.',
+      '몸이 피곤하다면 통증을 기록하고 쉬어요.',
+      '오늘 하루 몸 상태는 어떠셨나요?',
+    ];
+  }
+
+  if (topBodyPart) {
+    pool = [
+      ...pool,
+      `최근 ${topBodyPart} 관련 기록이 많았어요.\n오늘은 어떠신가요?`,
+      `${topBodyPart} 통증, 오늘은 좀 나아졌나요?`,
+    ];
+  }
+
+  return pool[seed % pool.length];
+}
 // ── HomeScreen ────────────────────────────────────────────
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -162,19 +214,32 @@ export default function HomeScreen() {
       style={[styles.root, { paddingTop: insets.top }]}
     >
       <OceanBubbles variant="home" />
-      {/* 설정 버튼 */}
-      <Pressable
-        style={({ pressed }) => [
-          styles.settingsBtn,
-          { top: insets.top + 6 },
-          pressed && { opacity: 0.7 },
-        ]}
-        onPress={() => router.push('/settings')}
-        accessibilityLabel="설정"
-        hitSlop={12}
-      >
-        <Ionicons name="settings-outline" size={22} color="rgba(168,216,234,0.85)" />
-      </Pressable>
+
+      {/* ── Top Bar ── */}
+      <View style={styles.topBar}>
+        <View style={styles.topBarBrand}>
+          <Image
+            source={require('../../assets/logo/naapo_typo_logo_white.png')}
+            style={styles.topBarLogo}
+            resizeMode="contain"
+            accessibilityLabel="나아포"
+          />
+          <Image
+            source={require('../../assets/logo/logo.png')}
+            style={styles.topBarMark}
+            resizeMode="contain"
+            accessibilityLabel="나아포 심볼"
+          />
+        </View>
+        <Pressable
+          style={({ pressed }) => [styles.settingsBtn, pressed && { opacity: 0.7 }]}
+          onPress={() => router.push('/settings')}
+          accessibilityLabel="설정"
+          hitSlop={12}
+        >
+          <Ionicons name="settings-outline" size={22} color="rgba(168,216,234,0.85)" />
+        </Pressable>
+      </View>
 
       <ScrollView
         style={styles.scroll}
@@ -393,11 +458,9 @@ export default function HomeScreen() {
           </View>
         </GlassCard>
 
-        {/* ── 오늘의 케어 제안 ─────────────────────────── */}
+        {/* ── 오늘의 케어 ──────────────────────────────── */}
         <SectionTitle label="오늘의 케어" />
-        <View style={styles.sectionCard}>
-          <CareSuggestionSection />
-        </View>
+        <CareTeaserCard />
 
         {/* ── 약 알람 ──────────────────────────────────── */}
         <SectionTitle label="약 알람" />
@@ -435,10 +498,32 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  // Top Bar
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: H_PAD,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(168,216,234,0.18)',
+  },
+  topBarBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+    flexShrink: 0,
+  },
+  topBarLogo: {
+    width: 96,
+    height: 30,
+  },
+  topBarMark: {
+    width: 36,
+    height: 30,
+    marginLeft: -5,
+  },
   settingsBtn: {
-    position: 'absolute',
-    right: H_PAD,
-    zIndex: 30,
     width: 38,
     height: 38,
     borderRadius: 12,
