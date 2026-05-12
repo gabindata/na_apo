@@ -14,6 +14,7 @@ import { OceanBubbles } from '../../components/ocean/OceanBubbles';
 import { CharacterShop } from '../../components/home/CharacterShop';
 import { DayPainDetailModal } from '../../components/home/DayPainDetailModal';
 import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
+import { CareSuggestionSection } from '../../components/home/CareSuggestionSection';
 import { Colors } from '../../constants/colors';
 import { floatingTabBarOverlayClearance } from '../../constants/tabBar';
 import { getCharacterById } from '../../constants/characters';
@@ -451,6 +452,12 @@ export default function HomeScreen() {
             </View>
           </View>
         </GlassCard>
+
+        {/* ── 오늘의 케어 제안 ─────────────────────────── */}
+        <SectionTitle label="오늘의 케어" />
+        <View style={styles.sectionCard}>
+          <CareSuggestionSection />
+        </View>
 
         {/* ── 약 알람 ──────────────────────────────────── */}
         <SectionTitle label="약 알람" />

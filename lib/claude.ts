@@ -6,7 +6,12 @@ export type Message = {
   content: string;
 };
 
-export type ChatbotType = 'rapo' | 'apo' | 'rapo-extract' | 'report-insight';
+export type ChatbotType =
+  | 'rapo'
+  | 'apo'
+  | 'rapo-extract'
+  | 'report-insight'
+  | 'care-suggestion';
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1200;
