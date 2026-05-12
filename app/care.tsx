@@ -47,6 +47,12 @@ const T = {
   secondary: '#7EC8E3',
 };
 
+/** 한글 본문 줄바꿈 — 음절 단위로 잘리지 않도록 (예: 추천드려↵요 방지) */
+const K_TEXT_WRAP = {
+  lineBreakStrategyIOS: 'hangul-word' as const,
+  textBreakStrategy: 'balanced' as const,
+};
+
 type Phase = 'intro' | 'main' | 'complete';
 
 const INTRO_LINES = [
@@ -401,11 +407,11 @@ export default function CareScreen() {
             resizeMode="contain"
           />
 
-          <Animated.Text style={[styles.introLine1, { opacity: line1Opacity }]}>
+          <Animated.Text style={[styles.introLine1, { opacity: line1Opacity }]} {...K_TEXT_WRAP}>
             {INTRO_LINES[0]}
           </Animated.Text>
 
-          <Animated.Text style={[styles.introLine2, { opacity: line2Opacity }]}>
+          <Animated.Text style={[styles.introLine2, { opacity: line2Opacity }]} {...K_TEXT_WRAP}>
             {INTRO_LINES[1]}
           </Animated.Text>
 
@@ -475,14 +481,14 @@ export default function CareScreen() {
                 <Ionicons name="sparkles" size={13} color={T.secondary} />
                 <Text style={styles.summaryLabel}>아포가 분석한 오늘의 방향</Text>
               </View>
-              <Text style={styles.summaryText}>
+              <Text style={styles.summaryText} {...K_TEXT_WRAP}>
                 {displayCare?.summary ?? fallbackCare.summary}
               </Text>
             </View>
 
             <View style={styles.guideCard}>
               <Text style={styles.guideTitle}>오늘은 이렇게 케어해볼게요</Text>
-              <Text style={styles.guideText}>
+              <Text style={styles.guideText} {...K_TEXT_WRAP}>
                 각 카드를 눌러 자세한 추천을 확인하고, 실천한 항목은 체크해보세요.
               </Text>
             </View>
@@ -532,11 +538,17 @@ export default function CareScreen() {
             resizeMode="contain"
           />
 
-          <Animated.Text style={[styles.completeLine1, { opacity: completeLine1Opacity }]}>
+          <Animated.Text
+            style={[styles.completeLine1, { opacity: completeLine1Opacity }]}
+            {...K_TEXT_WRAP}
+          >
             오늘의 케어 완료! 💙
           </Animated.Text>
 
-          <Animated.Text style={[styles.completeLine2, { opacity: completeLine2Opacity }]}>
+          <Animated.Text
+            style={[styles.completeLine2, { opacity: completeLine2Opacity }]}
+            {...K_TEXT_WRAP}
+          >
             내일도 아포가 함께할게요
           </Animated.Text>
 
@@ -635,12 +647,16 @@ function CareCategoryCard({
         )}
       </View>
 
-      <Text style={styles.categoryTitle}>{card.title}</Text>
-      <Text style={styles.categoryPreview}>{card.preview}</Text>
+      <Text style={styles.categoryTitle} {...K_TEXT_WRAP}>
+        {card.title}
+      </Text>
+      <Text style={styles.categoryPreview} {...K_TEXT_WRAP}>
+        {card.preview}
+      </Text>
 
       <View style={styles.categoryInsight}>
         <Ionicons name="analytics-outline" size={12} color={T.secondary} />
-        <Text style={styles.categoryInsightText} numberOfLines={2}>
+        <Text style={styles.categoryInsightText} numberOfLines={2} {...K_TEXT_WRAP}>
           {insight}
         </Text>
       </View>
@@ -697,8 +713,12 @@ function CareDetailModal({
                   <Ionicons name={config.icon as any} size={22} color="#FFFFFF" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalCategory}>{config.label}</Text>
-                  <Text style={styles.modalTitle}>{card.title}</Text>
+                  <Text style={styles.modalCategory} {...K_TEXT_WRAP}>
+                    {config.label}
+                  </Text>
+                  <Text style={styles.modalTitle} {...K_TEXT_WRAP}>
+                    {card.title}
+                  </Text>
                 </View>
               </View>
 
@@ -736,7 +756,9 @@ function CareDetailModal({
                   style={styles.apoMessageImage}
                   resizeMode="contain"
                 />
-                <Text style={styles.apoMessageText}>{detail.apoMessage}</Text>
+                <Text style={styles.apoMessageText} {...K_TEXT_WRAP}>
+                  {detail.apoMessage}
+                </Text>
               </View>
             </ScrollView>
 
@@ -758,7 +780,7 @@ function CareDetailModal({
                   color="#FFFFFF"
                 />
                 <Text style={styles.modalActionText}>
-                  {isChecked ? '완료했어요' : '이 케어 완료하기'}
+                  {isChecked ? '완료했어요' : '완료하기'}
                 </Text>
               </LinearGradient>
             </Pressable>
@@ -776,7 +798,9 @@ function InfoBox({ icon, label, text }: { icon: any; label: string; text: string
         <Ionicons name={icon} size={13} color={T.secondary} />
         <Text style={styles.infoBoxLabel}>{label}</Text>
       </View>
-      <Text style={styles.infoBoxText}>{text}</Text>
+      <Text style={styles.infoBoxText} {...K_TEXT_WRAP}>
+        {text}
+      </Text>
     </View>
   );
 }
@@ -785,7 +809,9 @@ function DetailSection({ title, body }: { title: string; body: string }) {
   return (
     <View style={styles.detailSection}>
       <Text style={styles.detailTitle}>{title}</Text>
-      <Text style={styles.detailBody}>{body}</Text>
+      <Text style={styles.detailBody} {...K_TEXT_WRAP}>
+        {body}
+      </Text>
     </View>
   );
 }
@@ -798,7 +824,9 @@ function BulletSection({ title, items }: { title: string; items: string[] }) {
         {items.map((item, index) => (
           <View key={`${title}-${index}`} style={styles.bulletRow}>
             <View style={styles.bulletDot} />
-            <Text style={styles.bulletText}>{item}</Text>
+            <Text style={styles.bulletText} {...K_TEXT_WRAP}>
+              {item}
+            </Text>
           </View>
         ))}
       </View>
