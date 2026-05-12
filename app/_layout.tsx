@@ -54,6 +54,7 @@ function RootLayoutNav() {
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="report" options={{ headerShown: false }} />
       <Stack.Screen name="magazine/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="care" options={{ headerShown: false }} />
     </Stack>
   );
 }

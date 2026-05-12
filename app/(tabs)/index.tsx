@@ -14,7 +14,7 @@ import { OceanBubbles } from '../../components/ocean/OceanBubbles';
 import { CharacterShop } from '../../components/home/CharacterShop';
 import { DayPainDetailModal } from '../../components/home/DayPainDetailModal';
 import { MedicineAlarmSection } from '../../components/home/MedicineAlarmSection';
-import { CareSuggestionSection } from '../../components/home/CareSuggestionSection';
+import { CareTeaserCard } from '../../components/home/CareTeaserCard';
 import { Colors } from '../../constants/colors';
 import { floatingTabBarOverlayClearance } from '../../constants/tabBar';
 import { getCharacterById } from '../../constants/characters';
@@ -69,11 +69,9 @@ function SectionTitle({ label, accessory, onAccessory }: {
 }
 
 const HEAT_PREVIEW_KEYS = ['none', 'low', 'mid', 'high', 'severe'] as const;
-
 // ── 개인화 인사말 ─────────────────────────────────────────
 function getPersonalizedGreeting(topBodyPart: string | undefined, seed: number): string {
   const hour = new Date().getHours();
-
   let pool: string[];
   if (hour >= 5 && hour < 11) {
     pool = [
@@ -116,14 +114,13 @@ function getPersonalizedGreeting(topBodyPart: string | undefined, seed: number):
   if (topBodyPart) {
     pool = [
       ...pool,
-      `최근 ${topBodyPart} 기록이 많았어요.\n오늘은 어떠신가요?`,
+      `최근 ${topBodyPart} 관련 기록이 많았어요.\n오늘은 어떠신가요?`,
       `${topBodyPart} 통증, 오늘은 좀 나아졌나요?`,
     ];
   }
 
   return pool[seed % pool.length];
 }
-
 // ── HomeScreen ────────────────────────────────────────────
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -220,12 +217,20 @@ export default function HomeScreen() {
 
       {/* ── Top Bar ── */}
       <View style={styles.topBar}>
-        <Image
-          source={require('../../assets/logo/naapo_typo_logo_white.png')}
-          style={styles.topBarLogo}
-          resizeMode="contain"
-          accessibilityLabel="나아포"
-        />
+        <View style={styles.topBarBrand}>
+          <Image
+            source={require('../../assets/logo/naapo_typo_logo_white.png')}
+            style={styles.topBarLogo}
+            resizeMode="contain"
+            accessibilityLabel="나아포"
+          />
+          <Image
+            source={require('../../assets/logo/logo.png')}
+            style={styles.topBarMark}
+            resizeMode="contain"
+            accessibilityLabel="나아포 심볼"
+          />
+        </View>
         <Pressable
           style={({ pressed }) => [styles.settingsBtn, pressed && { opacity: 0.7 }]}
           onPress={() => router.push('/settings')}
@@ -453,11 +458,9 @@ export default function HomeScreen() {
           </View>
         </GlassCard>
 
-        {/* ── 오늘의 케어 제안 ─────────────────────────── */}
+        {/* ── 오늘의 케어 ──────────────────────────────── */}
         <SectionTitle label="오늘의 케어" />
-        <View style={styles.sectionCard}>
-          <CareSuggestionSection />
-        </View>
+        <CareTeaserCard />
 
         {/* ── 약 알람 ──────────────────────────────────── */}
         <SectionTitle label="약 알람" />
@@ -505,9 +508,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(168,216,234,0.18)',
   },
+  topBarBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+    flexShrink: 0,
+  },
   topBarLogo: {
     width: 96,
     height: 30,
+  },
+  topBarMark: {
+    width: 36,
+    height: 30,
+    marginLeft: -5,
   },
   settingsBtn: {
     width: 38,
