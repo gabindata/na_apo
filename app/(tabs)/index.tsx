@@ -460,7 +460,9 @@ export default function HomeScreen() {
 
         {/* ── 오늘의 케어 ──────────────────────────────── */}
         <SectionTitle label="오늘의 케어" />
-        <CareTeaserCard />
+        <View style={styles.sectionCard}>
+          <CareTeaserCard />
+        </View>
 
         {/* ── 약 알람 ──────────────────────────────────── */}
         <SectionTitle label="약 알람" />
