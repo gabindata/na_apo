@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -63,60 +64,70 @@ export function CareTeaserCard() {
 
   return (
     <GlassCard style={styles.card}>
-      {/* 헤더 */}
-      <View style={styles.headerRow}>
-        <View style={styles.aiBadge}>
-          <Ionicons name="sparkles" size={10} color={T.secondary} />
-          <Text style={styles.aiBadgeText}>AI 케어</Text>
-        </View>
-        {loading && <ActivityIndicator size="small" color={T.secondary} />}
-      </View>
-
-      {/* AI 요약 텍스트 */}
-      {loading ? (
-        <View style={styles.loadingRow}>
-          <Text style={styles.loadingText}>케어를 분석하고 있어요…</Text>
-        </View>
-      ) : (
-        <Text
-          style={styles.summaryText}
-          lineBreakStrategyIOS="hangul-word"
-          textBreakStrategy="balanced"
-        >
-          {summaryText}
-        </Text>
-      )}
-
-      {/* 신호 칩 */}
-      {signals.length > 0 && !loading && (
-        <View style={styles.signalRow}>
-          {signals.map((sig) => (
-            <View key={sig} style={styles.signalChip}>
-              <View style={styles.signalDot} />
-              <Text style={styles.signalText}>{sig}</Text>
+      <View style={styles.verticalStack}>
+        {/* 헤더 */}
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeft}>
+            <Image
+              source={require('../../assets/images/apo_tab.png')}
+              style={styles.apoThumb}
+              resizeMode="contain"
+              accessibilityIgnoresInvertColors
+            />
+            <View style={styles.aiBadge}>
+              <Ionicons name="sparkles" size={10} color={T.secondary} />
+              <Text style={styles.aiBadgeText}>AI 케어</Text>
             </View>
-          ))}
+          </View>
+          {loading && <ActivityIndicator size="small" color={T.secondary} />}
         </View>
-      )}
 
-      {/* CTA 버튼 */}
-      <Pressable
-        onPress={() => router.push('/care')}
-        style={({ pressed }) => [styles.ctaWrap, pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] }]}
-        accessibilityRole="button"
-        accessibilityLabel="오늘의 케어 시작하기"
-      >
-        <LinearGradient
-          colors={['rgba(74,144,217,0.95)', 'rgba(46,95,163,0.95)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.ctaBtn}
+        {/* AI 요약 텍스트 */}
+        {loading ? (
+          <View style={styles.loadingRow}>
+            <Text style={styles.loadingText}>케어를 분석하고 있어요…</Text>
+          </View>
+        ) : (
+          <Text
+            style={styles.summaryText}
+            lineBreakStrategyIOS="hangul-word"
+            textBreakStrategy="balanced"
+          >
+            {summaryText}
+          </Text>
+        )}
+
+        {/* 신호 칩 */}
+        {signals.length > 0 && !loading && (
+          <View style={styles.signalRow}>
+            {signals.map((sig) => (
+              <View key={sig} style={styles.signalChip}>
+                <View style={styles.signalDot} />
+                <Text style={styles.signalText}>{sig}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* CTA 버튼 */}
+        <Pressable
+          onPress={() => router.push('/care')}
+          style={({ pressed }) => [styles.ctaWrap, pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] }]}
+          accessibilityRole="button"
+          accessibilityLabel="오늘의 케어 시작하기"
         >
-          <Ionicons name="heart-circle-outline" size={17} color="#fff" />
-          <Text style={styles.ctaText}>오늘의 케어 시작하기</Text>
-          <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.75)" />
-        </LinearGradient>
-      </Pressable>
+          <LinearGradient
+            colors={['rgba(74,144,217,0.95)', 'rgba(46,95,163,0.95)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.ctaBtn}
+          >
+            <Ionicons name="heart-circle-outline" size={17} color="#fff" />
+            <Text style={styles.ctaText}>오늘의 케어 시작하기</Text>
+            <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.75)" />
+          </LinearGradient>
+        </Pressable>
+      </View>
     </GlassCard>
   );
 }
@@ -124,11 +135,26 @@ export function CareTeaserCard() {
 const styles = StyleSheet.create({
   card: {},
 
+  /** 헤더 ↔ 요약 ↔ 칩 ↔ 버튼 사이 간격 */
+  verticalStack: {
+    gap: 16,
+  },
+
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
+  apoThumb: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
   },
   aiBadge: {
     flexDirection: 'row',
@@ -149,7 +175,7 @@ const styles = StyleSheet.create({
   },
 
   loadingRow: {
-    marginVertical: 6,
+    paddingVertical: 2,
   },
   loadingText: {
     fontSize: 13,
@@ -161,16 +187,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.88)',
-    lineHeight: 21,
+    lineHeight: 22,
     letterSpacing: -0.2,
-    marginBottom: 10,
   },
 
   signalRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 14,
+    gap: 8,
+    rowGap: 10,
   },
   signalChip: {
     flexDirection: 'row',
@@ -200,25 +225,25 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#1A4FA8',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.30,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 6,
   },
   ctaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 13,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    gap: 7,
+    gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(126,200,227,0.40)',
+    borderColor: 'rgba(126,200,227,0.45)',
     borderRadius: 16,
   },
   ctaText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: '#fff',
     letterSpacing: -0.2,
