@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Dimensions,
   Easing,
   Image,
-  LayoutAnimation,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +13,9 @@ import {
   UIManager,
   View,
 } from 'react-native';
+
+// 모달 헤더(~70) + 버튼(~70) + 패딩(~60) 제외한 스크롤 영역 최대 높이
+const MODAL_SCROLL_MAX_H = Dimensions.get('window').height * 0.86 - 200;
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -27,16 +31,17 @@ import {
   type ParsedCare,
   type CareSummary,
 } from '../lib/careData';
+import { fetchUserProfile } from '../lib/userProfile';
+import { useAuth } from '../contexts/AuthContext';
 
-// Android LayoutAnimation 활성화
 if (Platform.OS === 'android') {
   (UIManager as any).setLayoutAnimationEnabledExperimental?.(true);
 }
 
 const T = {
-  text:      '#FFFFFF',
+  text: '#FFFFFF',
   textMuted: '#C8DFEF',
-  primary:   '#4A90D9',
+  primary: '#4A90D9',
   secondary: '#7EC8E3',
 };
 
@@ -47,52 +52,50 @@ const INTRO_LINES = [
   '최근 기록을 바탕으로 추천드릴게요.',
 ];
 
-// ── 메인 스크린 ────────────────────────────────────────────
 export default function CareScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
-  const [phase, setPhase]         = useState<Phase>('intro');
-  const [summary, setSummary]     = useState<CareSummary | null>(null);
-  const [care, setCare]           = useState<ParsedCare | null>(null);
-  const [openSection, setOpenSection] = useState<CategoryKey | null>(null);
-  const [checked, setChecked]     = useState<Set<CategoryKey>>(new Set());
+  const [phase, setPhase] = useState<Phase>('intro');
+  const [summary, setSummary] = useState<CareSummary | null>(null);
+  const [care, setCare] = useState<ParsedCare | null>(null);
+  const [selectedCard, setSelectedCard] = useState<CardData | null>(null);
+  const [checked, setChecked] = useState<Set<CategoryKey>>(new Set());
 
-  // ── 애니메이션 값 ──
-  const apoFloat          = useRef(new Animated.Value(0)).current;
-  const apoScale          = useRef(new Animated.Value(1)).current;
-  const introOpacity      = useRef(new Animated.Value(0)).current;
-  const line1Opacity      = useRef(new Animated.Value(0)).current;
-  const line2Opacity      = useRef(new Animated.Value(0)).current;
-  const skipOpacity       = useRef(new Animated.Value(0)).current;
-  const mainOpacity       = useRef(new Animated.Value(0)).current;
+  const apoFloat = useRef(new Animated.Value(0)).current;
+  const apoScale = useRef(new Animated.Value(1)).current;
+  const introOpacity = useRef(new Animated.Value(0)).current;
+  const line1Opacity = useRef(new Animated.Value(0)).current;
+  const line2Opacity = useRef(new Animated.Value(0)).current;
+  const skipOpacity = useRef(new Animated.Value(0)).current;
+  const mainOpacity = useRef(new Animated.Value(0)).current;
 
-  // 완료 화면 애니메이션
-  const completeOpacity      = useRef(new Animated.Value(0)).current;
-  const apoCompleteFloat     = useRef(new Animated.Value(0)).current;
-  const apoCompleteScale     = useRef(new Animated.Value(0)).current;
+  const completeOpacity = useRef(new Animated.Value(0)).current;
+  const apoCompleteFloat = useRef(new Animated.Value(0)).current;
+  const apoCompleteScale = useRef(new Animated.Value(0)).current;
   const completeLine1Opacity = useRef(new Animated.Value(0)).current;
   const completeLine2Opacity = useRef(new Animated.Value(0)).current;
-  const completeBtnOpacity   = useRef(new Animated.Value(0)).current;
+  const completeBtnOpacity = useRef(new Animated.Value(0)).current;
 
   const transitionDoneRef = useRef(false);
-  const completeFloatRef  = useRef<Animated.CompositeAnimation | null>(null);
+  const completeFloatRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  // ── 데이터 로드 ──
   useEffect(() => {
     (async () => {
       try {
-        const { summary: s, care: c } = await fetchCareData();
+        const userProfile = user?.id ? await fetchUserProfile(user.id) : null;
+        const profile = userProfile
+          ? { birthYear: userProfile.birthYear, gender: userProfile.gender }
+          : null;
+        const { summary: s, care: c } = await fetchCareData(profile);
         setSummary(s);
         setCare(c);
-        setOpenSection(c.primary.category);
       } catch {
         setCare(FALLBACK_CARE);
-        setOpenSection('stretch');
       }
     })();
-  }, []);
+  }, [user?.id]);
 
-  // ── 인트로 애니메이션 시퀀스 ──
   useEffect(() => {
     const floatLoop = Animated.loop(
       Animated.sequence([
@@ -110,6 +113,7 @@ export default function CareScreen() {
         }),
       ]),
     );
+
     floatLoop.start();
 
     Animated.sequence([
@@ -118,7 +122,7 @@ export default function CareScreen() {
       Animated.delay(500),
       Animated.timing(line2Opacity, { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.delay(300),
-      Animated.timing(skipOpacity,  { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(skipOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
     ]).start();
 
     const timer = setTimeout(() => doTransition(), 3200);
@@ -127,7 +131,6 @@ export default function CareScreen() {
       clearTimeout(timer);
       floatLoop.stop();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const doTransition = useCallback(() => {
@@ -136,42 +139,32 @@ export default function CareScreen() {
 
     Animated.parallel([
       Animated.timing(introOpacity, { toValue: 0, duration: 380, useNativeDriver: true }),
-      Animated.timing(apoScale,     { toValue: 0.4, duration: 380, useNativeDriver: true }),
+      Animated.timing(apoScale, { toValue: 0.4, duration: 380, useNativeDriver: true }),
     ]).start(() => {
       setPhase('main');
       Animated.timing(mainOpacity, { toValue: 1, duration: 480, useNativeDriver: true }).start();
     });
   }, [introOpacity, apoScale, mainOpacity]);
 
-  const toggleSection = useCallback((category: CategoryKey) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setOpenSection((prev) => (prev === category ? null : category));
-  }, []);
-
-  // ── 체크박스 ──
   const handleCheck = useCallback((category: CategoryKey) => {
     setChecked((prev) => {
       const next = new Set(prev);
-      if (next.has(category)) {
-        next.delete(category);
-      } else {
-        next.add(category);
-      }
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
       return next;
     });
   }, []);
 
   const displayCare = care ?? FALLBACK_CARE;
-  const allCards: CardData[] = [displayCare.primary, ...displayCare.secondary];
+  const allCards = displayCare.cards;
 
-  // ── 완료 감지 ──
   useEffect(() => {
     if (phase !== 'main') return;
-    if (checked.size < allCards.length || allCards.length === 0) return;
+    if (allCards.length === 0) return;
+    if (checked.size < allCards.length) return;
 
     setPhase('complete');
 
-    // 아포 부유 루프 (완료 화면용)
     const floatLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(apoCompleteFloat, {
@@ -188,36 +181,47 @@ export default function CareScreen() {
         }),
       ]),
     );
+
     completeFloatRef.current = floatLoop;
     floatLoop.start();
 
-    // 완료 화면 순차 등장
     Animated.sequence([
-      Animated.timing(completeOpacity,      { toValue: 1, duration: 450, useNativeDriver: true }),
-      Animated.timing(apoCompleteScale,     { toValue: 1, duration: 600, easing: Easing.out(Easing.back(1.3)), useNativeDriver: true }),
+      Animated.timing(completeOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+      Animated.timing(apoCompleteScale, {
+        toValue: 1,
+        duration: 600,
+        easing: Easing.out(Easing.back(1.3)),
+        useNativeDriver: true,
+      }),
       Animated.delay(200),
       Animated.timing(completeLine1Opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.delay(150),
       Animated.timing(completeLine2Opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.delay(300),
-      Animated.timing(completeBtnOpacity,   { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(completeBtnOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
     ]).start();
 
-    return () => { completeFloatRef.current?.stop(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checked.size, phase]);
+    return () => {
+      completeFloatRef.current?.stop();
+    };
+  }, [checked.size, phase, allCards.length]);
 
   return (
     <LinearGradient
       colors={['#3A7AB0', '#1A4068', '#0F2840', '#0A1A2E']}
-      locations={[0, 0.35, 0.70, 1]}
+      locations={[0, 0.35, 0.7, 1]}
       style={[styles.root, { paddingTop: insets.top }]}
     >
       <OceanBubbles variant="home" />
 
-      {/* ════════════════ 인트로 페이즈 ════════════════ */}
       {phase === 'intro' && (
-        <Animated.View style={[StyleSheet.absoluteFill, styles.introContainer, { opacity: introOpacity, paddingTop: insets.top }]}>
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            styles.introContainer,
+            { opacity: introOpacity, paddingTop: insets.top },
+          ]}
+        >
           <Pressable style={StyleSheet.absoluteFill} onPress={doTransition} />
 
           <Animated.Image
@@ -232,6 +236,7 @@ export default function CareScreen() {
           <Animated.Text style={[styles.introLine1, { opacity: line1Opacity }]}>
             {INTRO_LINES[0]}
           </Animated.Text>
+
           <Animated.Text style={[styles.introLine2, { opacity: line2Opacity }]}>
             {INTRO_LINES[1]}
           </Animated.Text>
@@ -242,11 +247,8 @@ export default function CareScreen() {
         </Animated.View>
       )}
 
-      {/* ════════════════ 메인 페이즈 ════════════════ */}
       {phase === 'main' && (
         <Animated.View style={[styles.flex, { opacity: mainOpacity }]}>
-
-          {/* 헤더 */}
           <View style={styles.header}>
             <Pressable
               onPress={() => router.back()}
@@ -267,7 +269,6 @@ export default function CareScreen() {
               <Text style={styles.headerTitle}>오늘의 케어</Text>
             </View>
 
-            {/* 진행 표시 */}
             <View style={styles.headerBtn}>
               <Text style={styles.headerProgress}>
                 {checked.size}/{allCards.length}
@@ -283,46 +284,57 @@ export default function CareScreen() {
             ]}
             showsVerticalScrollIndicator={false}
           >
-            {/* AI 요약 카드 */}
             <View style={styles.summaryCard}>
               <View style={styles.summaryShine} />
               <View style={styles.summaryHeaderRow}>
-                <Ionicons name="sparkles" size={12} color={T.secondary} />
-                <Text style={styles.summaryLabel}>AI가 분석한 내용이에요</Text>
+                <Ionicons name="sparkles" size={13} color={T.secondary} />
+                <Text style={styles.summaryLabel}>아포가 분석한 오늘의 방향</Text>
               </View>
-              <Text
-                style={styles.summaryText}
-                lineBreakStrategyIOS="hangul-word"
-                textBreakStrategy="balanced"
-              >
-                {displayCare.summary}
+              <Text style={styles.summaryText}>{displayCare.summary}</Text>
+            </View>
+
+            <View style={styles.guideCard}>
+              <Text style={styles.guideTitle}>오늘은 이렇게 케어해볼게요</Text>
+              <Text style={styles.guideText}>
+                각 카드를 눌러 자세한 추천을 확인하고, 실천한 항목은 체크해보세요.
               </Text>
             </View>
 
-            {/* 케어 섹션 목록 */}
-            <View style={styles.sectionList}>
+            <View style={styles.sectionGrid}>
               {allCards.map((card, index) => (
-                <CareSection
+                <CareCategoryCard
                   key={card.category}
                   card={card}
                   isPrimary={index === 0}
-                  isOpen={openSection === card.category}
                   isChecked={checked.has(card.category)}
                   insight={getInsight(summary, card.category)}
-                  onToggle={() => toggleSection(card.category)}
+                  onPress={() => setSelectedCard(card)}
                   onCheck={() => handleCheck(card.category)}
                 />
               ))}
             </View>
-
           </ScrollView>
+
+          <CareDetailModal
+            card={selectedCard}
+            summary={summary}
+            visible={!!selectedCard}
+            isChecked={selectedCard ? checked.has(selectedCard.category) : false}
+            onClose={() => setSelectedCard(null)}
+            onCheck={() => {
+              if (selectedCard) handleCheck(selectedCard.category);
+            }}
+          />
         </Animated.View>
       )}
 
-      {/* ════════════════ 완료 페이즈 ════════════════ */}
       {phase === 'complete' && (
         <Animated.View
-          style={[StyleSheet.absoluteFill, styles.completeContainer, { opacity: completeOpacity, paddingTop: insets.top }]}
+          style={[
+            StyleSheet.absoluteFill,
+            styles.completeContainer,
+            { opacity: completeOpacity, paddingTop: insets.top },
+          ]}
         >
           <Animated.Image
             source={require('../assets/images/apo_tab.png')}
@@ -336,8 +348,9 @@ export default function CareScreen() {
           <Animated.Text style={[styles.completeLine1, { opacity: completeLine1Opacity }]}>
             오늘의 케어 완료! 💙
           </Animated.Text>
+
           <Animated.Text style={[styles.completeLine2, { opacity: completeLine2Opacity }]}>
-            내일도 만나요
+            내일도 아포가 함께할게요
           </Animated.Text>
 
           <Animated.View style={{ opacity: completeBtnOpacity, marginTop: 36 }}>
@@ -363,74 +376,56 @@ export default function CareScreen() {
   );
 }
 
-// ── 케어 섹션 카드 ─────────────────────────────────────────
-function CareSection({
+function CareCategoryCard({
   card,
   isPrimary,
-  isOpen,
   isChecked,
   insight,
-  onToggle,
+  onPress,
   onCheck,
 }: {
   card: CardData;
   isPrimary: boolean;
-  isOpen: boolean;
   isChecked: boolean;
   insight: string;
-  onToggle: () => void;
+  onPress: () => void;
   onCheck: () => void;
 }) {
   const config = CATEGORY_CONFIG[card.category];
 
   return (
     <Pressable
-      onPress={onToggle}
+      onPress={onPress}
       style={({ pressed }) => [
-        styles.section,
-        isPrimary  && styles.sectionPrimary,
-        isOpen     && styles.sectionOpen,
-        isChecked  && styles.sectionChecked,
-        pressed    && { opacity: 0.92 },
+        styles.categoryCard,
+        isPrimary && styles.categoryCardPrimary,
+        isChecked && styles.categoryCardChecked,
+        pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`${config.label} 케어`}
-      accessibilityState={{ expanded: isOpen }}
+      accessibilityLabel={`${config.label} 자세히 보기`}
     >
-      {isPrimary && <View style={styles.sectionShine} />}
-
-      {/* ─ 헤더 행 ─ */}
-      <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIconWrap, isPrimary && styles.sectionIconWrapPrimary, isChecked && styles.sectionIconWrapChecked]}>
-          <Ionicons name={config.icon as any} size={isPrimary ? 20 : 17} color={isChecked ? '#7EC8E3' : T.secondary} />
+      <View style={styles.categoryTopRow}>
+        <View
+          style={[
+            styles.categoryIconWrap,
+            isPrimary && styles.categoryIconWrapPrimary,
+            isChecked && styles.categoryIconWrapChecked,
+          ]}
+        >
+          <Ionicons
+            name={config.icon as any}
+            size={20}
+            color={isChecked ? '#FFFFFF' : T.secondary}
+          />
         </View>
 
-        <View style={styles.sectionHeaderMid}>
-          <View style={styles.sectionLabelRow}>
-            <Text style={[styles.sectionCategory, isChecked && styles.sectionCategoryChecked]}>
-              {config.label}
-            </Text>
-            {isPrimary && !isChecked && (
-              <View style={styles.primaryBadge}>
-                <Text style={styles.primaryBadgeText}>오늘의 핵심</Text>
-              </View>
-            )}
-            {isChecked && (
-              <View style={styles.doneBadge}>
-                <Text style={styles.doneBadgeText}>완료</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* 체크박스 - 별도 터치 영역 */}
         <Pressable
           onPress={onCheck}
           hitSlop={10}
           style={styles.checkboxBtn}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: isChecked }}
-          accessibilityLabel={`${config.label} 완료 체크`}
         >
           <Ionicons
             name={isChecked ? 'checkmark-circle' : 'ellipse-outline'}
@@ -438,55 +433,176 @@ function CareSection({
             color={isChecked ? '#7EC8E3' : 'rgba(168,216,234,0.35)'}
           />
         </Pressable>
-
-        <Ionicons
-          name={isOpen ? 'chevron-up' : 'chevron-down'}
-          size={16}
-          color="rgba(168,216,234,0.50)"
-        />
       </View>
 
-      {/* ─ 펼쳐진 내용 ─ */}
-      {isOpen && (
-        <View style={styles.sectionContent}>
-          <View style={styles.sectionDivider} />
-
-          {/* AI 인사이트 */}
-          <View style={styles.insightRow}>
-            <Ionicons name="analytics-outline" size={13} color={T.secondary} />
-            <Text
-              style={styles.insightText}
-              lineBreakStrategyIOS="hangul-word"
-              textBreakStrategy="balanced"
-            >
-              {insight}
-            </Text>
+      <View style={styles.categoryTitleRow}>
+        <Text style={styles.categoryLabel}>{config.label}</Text>
+        {isPrimary && !isChecked && (
+          <View style={styles.primaryBadge}>
+            <Text style={styles.primaryBadgeText}>핵심</Text>
           </View>
+        )}
+      </View>
 
-          {/* 케어 팁 본문 */}
-          <Text
-            style={styles.sectionBody}
-            lineBreakStrategyIOS="hangul-word"
-            textBreakStrategy="balanced"
-          >
-            {card.body}
-          </Text>
-        </View>
-      )}
+      <Text style={styles.categoryTitle}>{card.title}</Text>
+      <Text style={styles.categoryPreview}>{card.preview}</Text>
+
+      <View style={styles.categoryInsight}>
+        <Ionicons name="analytics-outline" size={12} color={T.secondary} />
+        <Text style={styles.categoryInsightText} numberOfLines={2}>
+          {insight}
+        </Text>
+      </View>
+
+      <View style={styles.cardBottomRow}>
+        <Text style={styles.cardCta}>{card.cta}</Text>
+        <Ionicons name="chevron-forward" size={15} color="rgba(126,200,227,0.75)" />
+      </View>
     </Pressable>
   );
 }
 
-// ── 스타일 ─────────────────────────────────────────────────
+function CareDetailModal({
+  card,
+  summary,
+  visible,
+  isChecked,
+  onClose,
+  onCheck,
+}: {
+  card: CardData | null;
+  summary: CareSummary | null;
+  visible: boolean;
+  isChecked: boolean;
+  onClose: () => void;
+  onCheck: () => void;
+}) {
+  if (!card) return null;
+
+  const config = CATEGORY_CONFIG[card.category];
+  const detail = card.detail;
+  const insight = getInsight(summary, card.category);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalRoot}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+
+        <View style={styles.modalCard}>
+          <LinearGradient
+            colors={['#1A4068', '#0A1A2E']}
+            style={styles.modalGradient}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleWrap}>
+                <View style={styles.modalIconWrap}>
+                  <Ionicons name={config.icon as any} size={22} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalCategory}>{config.label}</Text>
+                  <Text style={styles.modalTitle}>{card.title}</Text>
+                </View>
+              </View>
+
+              <Pressable onPress={onClose} hitSlop={10} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="rgba(255,255,255,0.8)" />
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ maxHeight: MODAL_SCROLL_MAX_H }} showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
+              <InfoBox icon="sparkles" label="아포의 분석" text={insight} />
+
+              <DetailSection title="왜 추천하나요?" body={detail.why} />
+              <DetailSection title="오늘의 추천" body={detail.recommendation} />
+
+              {detail.steps && <BulletSection title="실천 방법" items={detail.steps} />}
+              {detail.foods && <BulletSection title="추천 음식" items={detail.foods} />}
+              {detail.routine && <BulletSection title="오늘의 루틴" items={detail.routine} />}
+              {detail.avoid && <BulletSection title="피하면 좋은 것" items={detail.avoid} />}
+
+              <View style={styles.apoMessageBox}>
+                <Image
+                  source={require('../assets/images/apo_tab.png')}
+                  style={styles.apoMessageImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.apoMessageText}>{detail.apoMessage}</Text>
+              </View>
+            </ScrollView>
+
+            <Pressable
+              onPress={onCheck}
+              style={({ pressed }) => [styles.modalActionBtn, pressed && { opacity: 0.8 }]}
+            >
+              <LinearGradient
+                colors={
+                  isChecked
+                    ? ['rgba(126,200,227,0.25)', 'rgba(126,200,227,0.18)']
+                    : ['rgba(74,144,217,0.95)', 'rgba(46,95,163,0.95)']
+                }
+                style={styles.modalActionGradient}
+              >
+                <Ionicons
+                  name={isChecked ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                  size={18}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.modalActionText}>
+                  {isChecked ? '완료했어요' : '이 케어 완료하기'}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          </LinearGradient>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function InfoBox({ icon, label, text }: { icon: any; label: string; text: string }) {
+  return (
+    <View style={styles.infoBox}>
+      <View style={styles.infoBoxHeader}>
+        <Ionicons name={icon} size={13} color={T.secondary} />
+        <Text style={styles.infoBoxLabel}>{label}</Text>
+      </View>
+      <Text style={styles.infoBoxText}>{text}</Text>
+    </View>
+  );
+}
+
+function DetailSection({ title, body }: { title: string; body: string }) {
+  return (
+    <View style={styles.detailSection}>
+      <Text style={styles.detailTitle}>{title}</Text>
+      <Text style={styles.detailBody}>{body}</Text>
+    </View>
+  );
+}
+
+function BulletSection({ title, items }: { title: string; items: string[] }) {
+  return (
+    <View style={styles.detailSection}>
+      <Text style={styles.detailTitle}>{title}</Text>
+      <View style={styles.bulletList}>
+        {items.map((item, index) => (
+          <View key={`${title}-${index}`} style={styles.bulletRow}>
+            <View style={styles.bulletDot} />
+            <Text style={styles.bulletText}>{item}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex: { flex: 1 },
 
-  // ── 인트로 ──
   introContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 0,
   },
   apoLarge: {
     width: 160,
@@ -517,7 +633,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── 헤더 ──
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -556,26 +671,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ── 스크롤 ──
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 20,
     gap: 12,
   },
 
-  // ── AI 요약 카드 ──
   summaryCard: {
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(126,200,227,0.28)',
     backgroundColor: 'rgba(74,144,217,0.14)',
     padding: 16,
     overflow: 'hidden',
-    marginBottom: 4,
   },
   summaryShine: {
     position: 'absolute',
-    top: 0, left: 0, right: 0,
+    top: 0,
+    left: 0,
+    right: 0,
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.25)',
   },
@@ -599,84 +713,86 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  // ── 섹션 목록 ──
-  sectionList: {
+  guideCard: {
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,234,0.14)',
+  },
+  guideTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 5,
+    letterSpacing: -0.2,
+  },
+  guideText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(200,223,239,0.78)',
+    lineHeight: 18,
+    letterSpacing: -0.1,
+  },
+
+  sectionGrid: {
     gap: 10,
   },
 
-  // ── 섹션 카드 (기본) ──
-  section: {
-    borderRadius: 18,
+  categoryCard: {
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(168,216,234,0.20)',
     backgroundColor: 'rgba(120,175,220,0.10)',
+    padding: 15,
     overflow: 'hidden',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
   },
-  sectionPrimary: {
-    borderColor: 'rgba(126,200,227,0.38)',
-    backgroundColor: 'rgba(74,144,217,0.18)',
+  categoryCardPrimary: {
+    borderColor: 'rgba(126,200,227,0.42)',
+    backgroundColor: 'rgba(74,144,217,0.20)',
   },
-  sectionOpen: {
-    borderColor: 'rgba(126,200,227,0.32)',
-  },
-  sectionChecked: {
+  categoryCardChecked: {
     borderColor: 'rgba(126,200,227,0.50)',
-    backgroundColor: 'rgba(74,144,217,0.22)',
+    backgroundColor: 'rgba(74,144,217,0.24)',
   },
-  sectionShine: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-
-  // ── 섹션 헤더 ──
-  sectionHeader: {
+  categoryTopRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
   },
-  sectionIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(126,200,227,0.12)',
+  categoryIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: 'rgba(126,200,227,0.13)',
     borderWidth: 1,
-    borderColor: 'rgba(126,200,227,0.22)',
+    borderColor: 'rgba(126,200,227,0.24)',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  sectionIconWrapPrimary: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: 'rgba(126,200,227,0.18)',
-    borderColor: 'rgba(126,200,227,0.35)',
+  categoryIconWrapPrimary: {
+    backgroundColor: 'rgba(126,200,227,0.20)',
+    borderColor: 'rgba(126,200,227,0.38)',
   },
-  sectionIconWrapChecked: {
-    backgroundColor: 'rgba(126,200,227,0.22)',
-    borderColor: 'rgba(126,200,227,0.50)',
+  categoryIconWrapChecked: {
+    backgroundColor: 'rgba(126,200,227,0.30)',
+    borderColor: 'rgba(126,200,227,0.55)',
   },
-  sectionHeaderMid: {
-    flex: 1,
-    gap: 3,
+  checkboxBtn: {
+    padding: 2,
   },
-  sectionLabelRow: {
+  categoryTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
+    marginTop: 12,
+    marginBottom: 5,
   },
-  sectionCategory: {
-    fontSize: 13,
+  categoryLabel: {
+    fontSize: 12,
     fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-  },
-  sectionCategoryChecked: {
     color: '#7EC8E3',
+    letterSpacing: 0.1,
   },
   primaryBadge: {
     backgroundColor: 'rgba(126,200,227,0.20)',
@@ -691,66 +807,231 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#7EC8E3',
     letterSpacing: 0.3,
-    textTransform: 'uppercase',
   },
-  doneBadge: {
-    backgroundColor: 'rgba(126,200,227,0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(126,200,227,0.55)',
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+  categoryTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.45,
+    marginBottom: 6,
   },
-  doneBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#7EC8E3',
-    letterSpacing: 0.3,
+  categoryPreview: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.84)',
+    lineHeight: 20,
+    letterSpacing: -0.2,
   },
-  checkboxBtn: {
-    padding: 2,
-    flexShrink: 0,
-  },
-
-  // ── 섹션 펼쳐진 내용 ──
-  sectionContent: {
-    gap: 10,
-    marginTop: 10,
-  },
-  sectionDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(168,216,234,0.22)',
-  },
-  insightRow: {
+  categoryInsight: {
+    marginTop: 12,
     flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: 7,
     backgroundColor: 'rgba(126,200,227,0.10)',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(126,200,227,0.20)',
+    borderColor: 'rgba(126,200,227,0.18)',
   },
-  insightText: {
+  categoryInsightText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#C8DFEF',
-    lineHeight: 18,
+    lineHeight: 16,
     letterSpacing: -0.1,
-    marginTop: 1,
   },
-  sectionBody: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.88)',
-    lineHeight: 22,
-    letterSpacing: -0.2,
-    paddingHorizontal: 2,
+  cardBottomRow: {
+    marginTop: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardCta: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#7EC8E3',
+    letterSpacing: -0.1,
   },
 
-  // ── 완료 화면 ──
+  modalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(0,10,20,0.62)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    maxHeight: '86%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.26)',
+  },
+  modalGradient: {
+    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  modalTitleWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  modalIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: 'rgba(126,200,227,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCategory: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#7EC8E3',
+    marginBottom: 3,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  modalCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalScroll: {
+    gap: 12,
+    paddingBottom: 14,
+  },
+  infoBox: {
+    borderRadius: 16,
+    backgroundColor: 'rgba(126,200,227,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.22)',
+    padding: 13,
+  },
+  infoBoxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  infoBoxLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#7EC8E3',
+  },
+  infoBoxText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.88)',
+    lineHeight: 20,
+    letterSpacing: -0.15,
+  },
+  detailSection: {
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,234,0.14)',
+    padding: 13,
+  },
+  detailTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginBottom: 7,
+    letterSpacing: -0.2,
+  },
+  detailBody: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.84)',
+    lineHeight: 21,
+    letterSpacing: -0.15,
+  },
+  bulletList: {
+    gap: 8,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  bulletDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#7EC8E3',
+    marginTop: 8,
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.84)',
+    lineHeight: 20,
+    letterSpacing: -0.15,
+  },
+  apoMessageBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 18,
+    backgroundColor: 'rgba(74,144,217,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.24)',
+    padding: 13,
+  },
+  apoMessageImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+  },
+  apoMessageText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: 20,
+    letterSpacing: -0.15,
+  },
+  modalActionBtn: {
+    marginTop: 4,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  modalActionGradient: {
+    height: 52,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.36)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modalActionText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+
   completeContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -775,7 +1056,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#1A4FA8',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.30,
+    shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 4,
   },
@@ -796,5 +1077,4 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: -0.2,
   },
-
 });

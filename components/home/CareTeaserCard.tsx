@@ -18,6 +18,8 @@ import {
   type ParsedCare,
   type CareSummary,
 } from '../../lib/careData';
+import { fetchUserProfile } from '../../lib/userProfile';
+import { useAuth } from '../../contexts/AuthContext';
 
 const T = {
   text:      '#FFFFFF',
@@ -27,6 +29,7 @@ const T = {
 };
 
 export function CareTeaserCard() {
+  const { user } = useAuth();
   const [care, setCare]       = useState<ParsedCare | null>(null);
   const [summary, setSummary] = useState<CareSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +39,11 @@ export function CareTeaserCard() {
       let active = true;
       (async () => {
         try {
-          const { summary: s, care: c } = await fetchCareData();
+          const userProfile = user?.id ? await fetchUserProfile(user.id) : null;
+          const profile = userProfile
+            ? { birthYear: userProfile.birthYear, gender: userProfile.gender }
+            : null;
+          const { summary: s, care: c } = await fetchCareData(profile);
           if (!active) return;
           setSummary(s);
           setCare(c);
@@ -48,7 +55,7 @@ export function CareTeaserCard() {
         }
       })();
       return () => { active = false; };
-    }, []),
+    }, [user?.id]),
   );
 
   const signals = useMemo(() => buildSignals(summary), [summary]);
