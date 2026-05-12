@@ -14,6 +14,7 @@ import { Bar, CartesianChart, Line, Scatter } from 'victory-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../components/common/Header';
+import { normalizeBodyPartForReport } from '../lib/bodyPartNormalize';
 import { fetchRecentRecords, type PainRecord } from '../lib/painRecords';
 import { sendMessage } from '../lib/claude';
 
@@ -34,6 +35,8 @@ const CHART_AXIS_FONT_SIZE = 11;
 const SCROLL_H_PAD = 20;
 const SECTION_CARD_PAD = 14;
 const CHART_HORIZONTAL_INSETS = SCROLL_H_PAD * 2 + SECTION_CARD_PAD * 2;
+/** 부위 라벨이 겹치지 않도록 막대당 최소 폭 — 필요 시 가로 스크롤 */
+const BAR_FREQ_MIN_SLOT_PX = 112;
 /** 차트 래퍼 높이 ≈ chartInnerWidth × 비율 — 값이 클수록 그래프 플롯이 커짐 */
 const LINE_CHART_HEIGHT_RATIO = 0.75;
 const BAR_CHART_HEIGHT_RATIO = 0.75;
@@ -202,8 +205,8 @@ export default function ReportScreen() {
   const barData = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of records) {
-      const part = row.body_part?.trim();
-      if (!part || part === 'undefined') continue;
+      const part = normalizeBodyPartForReport(row.body_part);
+      if (!part) continue;
       counts.set(part, (counts.get(part) ?? 0) + 1);
     }
 
@@ -258,7 +261,7 @@ export default function ReportScreen() {
     const daily = new Map<string, { pairs: { ts: number; v: number }[]; firstTs: number }>();
     for (const row of records) {
       if (row.intensity == null || Number.isNaN(Number(row.intensity))) continue;
-      const part = row.body_part?.trim();
+      const part = normalizeBodyPartForReport(row.body_part);
       if (!part || part !== selectedIntensityPartLabel) continue;
       const key = toDateKey(getRecordTime(row));
       const ts = new Date(getRecordTime(row)).getTime();
@@ -525,6 +528,11 @@ export default function ReportScreen() {
   };
 
   const chartInnerWidth = Math.max(0, windowWidth - CHART_HORIZONTAL_INSETS);
+  /** 빈도 막대: 부위 수가 많거나 이름이 길 때 캔버스를 넓혀 X축 라벨 겹침 방지 */
+  const barFreqChartWidth = Math.max(
+    chartInnerWidth,
+    barData.length * BAR_FREQ_MIN_SLOT_PX,
+  );
   const lineChartHeight = Math.round(
     Math.min(Math.max(chartInnerWidth * LINE_CHART_HEIGHT_RATIO, 224), 360),
   );
@@ -755,57 +763,68 @@ export default function ReportScreen() {
             </View>
           ) : (
             <View style={[styles.chartCenterRow, styles.chartPlotCardInset]}>
-              <View style={[styles.chartWrapBar, { height: barChartHeight }]}>
-                <CartesianChart
-                  data={barData}
-                  xKey="x"
-                  yKeys={['y']}
-                  padding={{ left: 44, right: 44, top: 8, bottom: 46 }}
-                  domain={{ y: [0, barYMax] }}
-                  frame={{
-                    lineColor: AXIS_GRID_COLOR,
-                    lineWidth: AXIS_TICK_WIDTH,
-                  }}
-                  xAxis={{
-                    axisSide: 'bottom',
-                    font: chartAxisFont ?? undefined,
-                    formatXLabel: (label: string | number) => {
-                      const raw = chartAxisLabelText(label);
-                      if (!raw) return '';
-                      return raw.length > 8 ? `${raw.slice(0, 7)}…` : raw;
-                    },
-                    labelColor: T.textMuted,
-                    lineColor: AXIS_GRID_COLOR,
-                    lineWidth: AXIS_TICK_WIDTH,
-                    labelOffset: 6,
-                    tickCount: Math.min(5, barData.length),
-                  }}
-                  yAxis={[
-                    {
-                      axisSide: 'left',
+              <ScrollView
+                horizontal
+                nestedScrollEnabled
+                style={styles.barFreqScrollView}
+                showsHorizontalScrollIndicator={barFreqChartWidth > chartInnerWidth + 8}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.barFreqScrollContent}
+              >
+                <View style={[styles.chartWrapBar, { width: barFreqChartWidth, height: barChartHeight }]}>
+                  <CartesianChart
+                    data={barData}
+                    xKey="x"
+                    yKeys={['y']}
+                    padding={{ left: 44, right: 44, top: 8, bottom: 56 }}
+                    domain={{ y: [0, barYMax] }}
+                    frame={{
+                      lineColor: AXIS_GRID_COLOR,
+                      lineWidth: AXIS_TICK_WIDTH,
+                    }}
+                    xAxis={{
+                      axisSide: 'bottom',
                       font: chartAxisFont ?? undefined,
-                      domain: [0, barYMax],
-                      tickValues: barYTickValues,
-                      formatYLabel: (v: number) => `${Math.round(Number(v))}회`,
+                      formatXLabel: (label: string | number) => {
+                        const raw = chartAxisLabelText(label);
+                        if (!raw) return '';
+                        // 넓은 캔버스에서는 전체 표시, 매우 긴 자유 입력만 제한
+                        if (raw.length > 14) return `${raw.slice(0, 13)}…`;
+                        return raw;
+                      },
                       labelColor: T.textMuted,
                       lineColor: AXIS_GRID_COLOR,
                       lineWidth: AXIS_TICK_WIDTH,
-                      labelOffset: 6,
-                    },
-                  ]}
-                  domainPadding={{ left: barDensityPadX, right: barDensityPadX, top: 8, bottom: 8 }}
-                >
-                  {({ points, chartBounds }) => (
-                    <Bar
-                      points={points.y}
-                      chartBounds={chartBounds}
-                      barCount={barData.length}
-                      innerPadding={barInnerGap}
-                      color={T.primary}
-                    />
-                  )}
-                </CartesianChart>
-              </View>
+                      labelOffset: 8,
+                      tickCount: Math.max(1, barData.length),
+                    }}
+                    yAxis={[
+                      {
+                        axisSide: 'left',
+                        font: chartAxisFont ?? undefined,
+                        domain: [0, barYMax],
+                        tickValues: barYTickValues,
+                        formatYLabel: (v: number) => `${Math.round(Number(v))}회`,
+                        labelColor: T.textMuted,
+                        lineColor: AXIS_GRID_COLOR,
+                        lineWidth: AXIS_TICK_WIDTH,
+                        labelOffset: 6,
+                      },
+                    ]}
+                    domainPadding={{ left: barDensityPadX, right: barDensityPadX, top: 8, bottom: 8 }}
+                  >
+                    {({ points, chartBounds }) => (
+                      <Bar
+                        points={points.y}
+                        chartBounds={chartBounds}
+                        barCount={barData.length}
+                        innerPadding={barInnerGap}
+                        color={T.primary}
+                      />
+                    )}
+                  </CartesianChart>
+                </View>
+              </ScrollView>
             </View>
           )}
           {!loading && barFreqPayload ? renderAiCard('barFreq') : null}
@@ -843,65 +862,57 @@ export default function ReportScreen() {
               <ActivityIndicator size="small" color={T.secondary} />
             </View>
           ) : (
-            <>
-              <View style={[styles.chartCenterRow, styles.chartPlotCardInset]}>
-                <View style={[styles.chartWrap, { height: emotionChartHeight }]}>
-                  <CartesianChart
-                    data={emotionLineData}
-                    xKey="x"
-                    yKeys={['y']}
-                    padding={{ left: 46, right: 36, top: 12, bottom: 24 }}
-                    domain={{ y: [1, 3] }}
-                    frame={{
-                      lineColor: AXIS_GRID_COLOR,
-                      lineWidth: AXIS_TICK_WIDTH,
-                    }}
-                    xAxis={{
-                      axisSide: 'bottom',
+            <View style={[styles.chartCenterRow, styles.chartPlotCardInset]}>
+              <View style={[styles.chartWrap, { height: emotionChartHeight }]}>
+                <CartesianChart
+                  data={emotionLineData}
+                  xKey="x"
+                  yKeys={['y']}
+                  padding={{ left: 46, right: 36, top: 12, bottom: 24 }}
+                  domain={{ y: [1, 3] }}
+                  frame={{
+                    lineColor: AXIS_GRID_COLOR,
+                    lineWidth: AXIS_TICK_WIDTH,
+                  }}
+                  xAxis={{
+                    axisSide: 'bottom',
+                    font: chartAxisFont ?? undefined,
+                    formatXLabel: (label: string | number) => chartAxisLabelText(label),
+                    labelColor: T.textMuted,
+                    lineColor: AXIS_GRID_COLOR,
+                    lineWidth: AXIS_TICK_WIDTH,
+                    labelOffset: 6,
+                    tickCount: Math.min(8, Math.max(1, emotionLineData.length)),
+                  }}
+                  yAxis={[
+                    {
+                      axisSide: 'left',
                       font: chartAxisFont ?? undefined,
-                      formatXLabel: (label: string | number) => chartAxisLabelText(label),
+                      domain: [1, 3],
+                      tickValues: [1, 2, 3],
+                      formatYLabel: (v: number) => emotionYAxisLabel(v),
                       labelColor: T.textMuted,
                       lineColor: AXIS_GRID_COLOR,
                       lineWidth: AXIS_TICK_WIDTH,
                       labelOffset: 6,
-                      tickCount: Math.min(8, Math.max(1, emotionLineData.length)),
-                    }}
-                    yAxis={[
-                      {
-                        axisSide: 'left',
-                        font: chartAxisFont ?? undefined,
-                        domain: [1, 3],
-                        tickValues: [1, 2, 3],
-                        formatYLabel: (v: number) => emotionYAxisLabel(v),
-                        labelColor: T.textMuted,
-                        lineColor: AXIS_GRID_COLOR,
-                        lineWidth: AXIS_TICK_WIDTH,
-                        labelOffset: 6,
-                      },
-                    ]}
-                    domainPadding={{ left: 8, right: 20, top: 10, bottom: 8 }}
-                  >
-                    {({ points }) => (
-                      <>
-                        <Line
-                          points={points.y}
-                          color={T.secondary}
-                          strokeWidth={2.5}
-                          curveType="linear"
-                        />
-                        <Scatter points={points.y} radius={6} color={T.primary} />
-                      </>
-                    )}
-                  </CartesianChart>
-                </View>
+                    },
+                  ]}
+                  domainPadding={{ left: 8, right: 20, top: 10, bottom: 8 }}
+                >
+                  {({ points }) => (
+                    <>
+                      <Line
+                        points={points.y}
+                        color={T.secondary}
+                        strokeWidth={2.5}
+                        curveType="linear"
+                      />
+                      <Scatter points={points.y} radius={6} color={T.primary} />
+                    </>
+                  )}
+                </CartesianChart>
               </View>
-              <View style={styles.emotionCard}>
-                <Text style={styles.emotionText}>
-                  기간 요약 · 좋음 {emotions.good}회 · 보통 {emotions.normal}회 · 나쁨{' '}
-                  {emotions.bad}회
-                </Text>
-              </View>
-            </>
+            </View>
           )}
           {!loading && emotionPayload ? renderAiCard('emotion') : null}
         </View>
@@ -998,9 +1009,15 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   chartWrapBar: {
+    overflow: 'visible',
+  },
+  /** 부위별 빈도 — 좁은 화면에서도 카드 전체 너비 사용 */
+  barFreqScrollView: {
     alignSelf: 'stretch',
     width: '100%',
-    overflow: 'visible',
+  },
+  barFreqScrollContent: {
+    flexGrow: 1,
   },
   intensityPartTabScroll: {
     flexDirection: 'row',
@@ -1074,20 +1091,6 @@ const styles = StyleSheet.create({
     color: T.textMuted,
     lineHeight: 16,
     marginBottom: 12,
-  },
-  emotionCard: {
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(100,160,210,0.28)',
-    backgroundColor: 'rgba(255,255,255,0.55)',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  emotionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: T.text,
   },
   aiCard: {
     marginTop: 14,
