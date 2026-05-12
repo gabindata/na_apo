@@ -7,8 +7,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "supabase": "supabase",
-    "functions:deploy:chat": "supabase functions deploy chat"
+    "functions:deploy:chat": "npx supabase functions deploy chat"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
@@ -40,6 +39,7 @@
     "victory-native": "^41.20.2"
   },
   "devDependencies": {
+    "supabase": "^2.98.2",
     "@types/react": "~19.1.0",
     "babel-preset-expo": "^55.0.18",
     "typescript": "~5.9.2"

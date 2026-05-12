@@ -211,6 +211,131 @@ export async function fetchMonthlyStats(year: number, month: number): Promise<{
   return { topBodyPart, avgIntensity, recordCount };
 }
 
+/**
+ * 최근 N일(기본 7일) 케어 요약 — '오늘의 케어 제안' 섹션에서 사용
+ * 통증·수면·감정 흐름을 한 번에 보고 신호(signal)를 만들어 낸다.
+ */
+export type CareSummary = {
+  periodDays: number;
+  recordCount: number;
+  topBodyPart: string | null;
+  topBodyPartCount: number;
+  avgIntensity: number;        // 0~10
+  highIntensityDays: number;   // intensity >= 7 인 날 수
+  avgSleepHours: number | null;
+  shortSleepDays: number;      // sleep_hours < 5 인 날 수
+  emotionGood: number;
+  emotionNormal: number;
+  emotionBad: number;
+  painTypes: string[];         // 최근에 자주 나온 통증 유형
+};
+
+export async function fetchRecentCareSummary(days: number = 7): Promise<CareSummary> {
+  const userId = await requireUserId();
+  const { startIso, endIso } = recentRangeIso(days);
+
+  const { data, error } = await supabase
+    .from('pain_records')
+    .select('id, body_part, intensity, pain_type, sleep_hours, emotion, recorded_at')
+    .eq('user_id', userId)
+    .gte('recorded_at', startIso)
+    .lte('recorded_at', endIso);
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as Pick<
+    PainRecord,
+    'body_part' | 'intensity' | 'pain_type' | 'sleep_hours' | 'emotion' | 'recorded_at'
+  >[];
+
+  const recordCount = rows.length;
+
+  // 부위 빈도
+  const partCounts = new Map<string, number>();
+  for (const r of rows) {
+    const p = r.body_part?.trim();
+    if (!p) continue;
+    partCounts.set(p, (partCounts.get(p) ?? 0) + 1);
+  }
+  let topBodyPart: string | null = null;
+  let topBodyPartCount = 0;
+  for (const [part, c] of Array.from(partCounts.entries())) {
+    if (c > topBodyPartCount) {
+      topBodyPart = part;
+      topBodyPartCount = c;
+    }
+  }
+
+  // 강도
+  const intensities = rows
+    .map((r) => r.intensity)
+    .filter((n): n is number => n != null && !Number.isNaN(Number(n)))
+    .map((n) => clampIntensity(Number(n)));
+  const avgIntensity =
+    intensities.length === 0
+      ? 0
+      : Math.round((intensities.reduce((a, b) => a + b, 0) / intensities.length) * 10) / 10;
+  const highIntensityDays = intensities.filter((v) => v >= 7).length;
+
+  // 수면 (하루 기준 — 같은 날 여러 기록이면 평균)
+  const sleepByDay = new Map<string, number[]>();
+  for (const r of rows) {
+    if (r.sleep_hours == null || Number.isNaN(Number(r.sleep_hours))) continue;
+    const key = toLocalDateKey(recordTime(r));
+    const arr = sleepByDay.get(key) ?? [];
+    arr.push(Number(r.sleep_hours));
+    sleepByDay.set(key, arr);
+  }
+  const dailySleep = Array.from(sleepByDay.values()).map(
+    (arr) => arr.reduce((a, b) => a + b, 0) / arr.length,
+  );
+  const avgSleepHours =
+    dailySleep.length === 0
+      ? null
+      : Math.round((dailySleep.reduce((a, b) => a + b, 0) / dailySleep.length) * 10) / 10;
+  const shortSleepDays = dailySleep.filter((h) => h < 5).length;
+
+  // 감정
+  let emotionGood = 0;
+  let emotionNormal = 0;
+  let emotionBad = 0;
+  for (const r of rows) {
+    if (r.emotion === '좋음') emotionGood += 1;
+    else if (r.emotion === '보통') emotionNormal += 1;
+    else if (r.emotion === '나쁨') emotionBad += 1;
+  }
+
+  // 통증 유형 (자주 나온 순서대로 최대 5개)
+  const painTypeCounts = new Map<string, number>();
+  for (const r of rows) {
+    if (!Array.isArray(r.pain_type)) continue;
+    for (const t of r.pain_type) {
+      const trimmed = (t ?? '').trim();
+      if (!trimmed) continue;
+      painTypeCounts.set(trimmed, (painTypeCounts.get(trimmed) ?? 0) + 1);
+    }
+  }
+  const painTypes = Array.from(painTypeCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([t]) => t);
+
+  return {
+    periodDays: days,
+    recordCount,
+    topBodyPart,
+    topBodyPartCount,
+    avgIntensity,
+    highIntensityDays,
+    avgSleepHours,
+    shortSleepDays,
+    emotionGood,
+    emotionNormal,
+    emotionBad,
+    painTypes,
+  };
+}
+
 /** 최근 N일 기록 전체 (레포트용, 최신순) */
 export async function fetchRecentRecords(days: number = 30): Promise<PainRecord[]> {
   const userId = await requireUserId();
