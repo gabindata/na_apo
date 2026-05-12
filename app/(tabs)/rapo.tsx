@@ -22,6 +22,7 @@ import { floatingTabBarOverlayClearance } from '../../constants/tabBar';
 import { RAPO_UI_INTENSITY_MARKER, RAPO_UI_SAVE_MARKER } from '../../constants/prompts';
 import { sendMessage, extractPainRecord, type Message as ApiMessage } from '../../lib/claude';
 import { supabase } from '../../lib/supabase';
+import { clearTodayCareCache } from '../../lib/todayCareCache';
 
 const H_PAD = 18;
 const COMPOSER_MIN_HEIGHT = 44;
@@ -254,6 +255,12 @@ export default function RapoScreen() {
         recorded_at: new Date().toISOString(),
       });
       if (insertError) throw insertError;
+
+      try {
+        await clearTodayCareCache();
+      } catch (cacheErr) {
+        console.warn('[Rapo] 오늘의 케어 캐시 무효화 실패:', cacheErr);
+      }
 
       let coinGranted = false;
       try {

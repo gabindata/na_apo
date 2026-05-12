@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Easing,
@@ -29,6 +30,7 @@ import {
   type ParsedCare,
   type CareSummary,
 } from '../lib/careData';
+import { clearTodayCareCache } from '../lib/todayCareCache';
 import { fetchUserProfile } from '../lib/userProfile';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -153,6 +155,7 @@ export default function CareScreen() {
   const [phase, setPhase] = useState<Phase>('intro');
   const [summary, setSummary] = useState<CareSummary | null>(null);
   const [care, setCare] = useState<ParsedCare | null>(null);
+  const [refreshingCare, setRefreshingCare] = useState(false);
   const [selectedCard, setSelectedCard] = useState<CardData | null>(null);
   const [checked, setChecked] = useState<Set<CategoryKey>>(new Set());
 
@@ -173,6 +176,7 @@ export default function CareScreen() {
 
   const transitionDoneRef = useRef(false);
   const completeFloatRef = useRef<Animated.CompositeAnimation | null>(null);
+  const refreshBusyRef = useRef(false);
 
   const fallbackCare = useMemo(() => getSafeFallbackCare(), []);
 
@@ -185,6 +189,34 @@ export default function CareScreen() {
       ? displayCare.cards
       : fallbackCare.cards;
   }, [displayCare, fallbackCare]);
+
+  const handleRefreshTodayCare = useCallback(async () => {
+    if (refreshBusyRef.current || phase !== 'main') return;
+    refreshBusyRef.current = true;
+    setRefreshingCare(true);
+    await clearTodayCareCache();
+    try {
+      const userProfile = user?.id ? await fetchUserProfile(user.id) : null;
+
+      const profile = userProfile
+        ? {
+            birthYear: userProfile.birthYear,
+            gender: userProfile.gender,
+          }
+        : null;
+
+      const result = await fetchCareData(profile, { forceRefresh: true });
+
+      setSummary(result.summary);
+      setCare(isValidCare(result.care) ? result.care : fallbackCare);
+    } catch (error) {
+      console.warn('[CARE SCREEN] refresh failed:', error);
+      setCare(fallbackCare);
+    } finally {
+      setRefreshingCare(false);
+      refreshBusyRef.current = false;
+    }
+  }, [user?.id, phase, fallbackCare]);
 
   useEffect(() => {
     let cancelled = false;
@@ -405,7 +437,24 @@ export default function CareScreen() {
               <Text style={styles.headerTitle}>오늘의 케어</Text>
             </View>
 
-            <View style={styles.headerBtn}>
+            <View style={styles.headerRight}>
+              <Pressable
+                onPress={handleRefreshTodayCare}
+                disabled={refreshingCare}
+                style={({ pressed }) => [
+                  styles.headerIconBtn,
+                  (pressed || refreshingCare) && { opacity: 0.55 },
+                ]}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="오늘의 케어 새로고침"
+              >
+                {refreshingCare ? (
+                  <ActivityIndicator size="small" color="rgba(168,216,234,0.85)" />
+                ) : (
+                  <Ionicons name="refresh-outline" size={21} color="rgba(168,216,234,0.85)" />
+                )}
+              </Pressable>
               <Text style={styles.headerProgress}>
                 {checked.size}/{allCards.length}
               </Text>
@@ -805,6 +854,19 @@ const styles = StyleSheet.create({
   },
   headerBtn: {
     width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 38,
+    paddingLeft: 4,
+  },
+  headerIconBtn: {
+    width: 34,
     height: 38,
     alignItems: 'center',
     justifyContent: 'center',

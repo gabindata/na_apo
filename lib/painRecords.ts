@@ -40,6 +40,16 @@ function toLocalDateKey(iso: string): string {
   return `${y}-${m}-${day}`;
 }
 
+/** 로컬 달력 기준 오늘 날짜 키 — 오늘의 통증 기록·케어 캐시와 동일 기준 */
+export function getLocalTodayDateKey(): string {
+  return toLocalDateKey(new Date().toISOString());
+}
+
+/** 오늘(local)의 pain_records 전체 (케어 시그니처·캐시 무효화용) */
+export async function fetchTodayPainRecords(): Promise<PainRecord[]> {
+  return fetchPainRecordsForLocalDate(getLocalTodayDateKey());
+}
+
 /** 해당 월의 [시작, 다음 달 시작) 구간 (로컬 자정 기준) */
 function monthRangeUtcStrings(year: number, month: number): { startIso: string; endExclusiveIso: string } {
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);

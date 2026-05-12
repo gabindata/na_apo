@@ -4,9 +4,17 @@
  * CareTeaserCard / CareScreen / CareDetailModal에서 import해서 사용
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sendMessage } from './claude';
-import { fetchRecentCareSummary, type CareSummary } from './painRecords';
+import {
+  fetchRecentCareSummary,
+  fetchTodayPainRecords,
+  type CareSummary,
+} from './painRecords';
+import {
+  createPainRecordSignature,
+  getCachedTodayCare,
+  saveCachedTodayCare,
+} from './todayCareCache';
 
 export type { CareSummary };
 
@@ -175,6 +183,24 @@ function buildLocalCareFromSummary(summary: CareSummary): ParsedCare {
   };
 }
 
+const EMPTY_CARE_SUMMARY: CareSummary = {
+  periodDays: 7,
+  recordCount: 0,
+  topBodyPart: null,
+  topBodyPartCount: 0,
+  avgIntensity: 0,
+  highIntensityDays: 0,
+  avgSleepHours: null,
+  shortSleepDays: 0,
+  emotionGood: 0,
+  emotionNormal: 0,
+  emotionBad: 0,
+  painTypes: [],
+};
+
+/** 기록이 없을 때 사용하는 정적 폴백 (카드 보충·에러 시 공통) */
+export const FALLBACK_CARE: ParsedCare = buildLocalCareFromSummary(EMPTY_CARE_SUMMARY);
+
 // ── JSON 파서 ──────────────────────────────────────────────
 function safeString(v: unknown, fallback = ''): string {
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : fallback;
@@ -228,9 +254,9 @@ export function parseCare(raw: string): ParsedCare | null {
     const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
 
     const summary = safeString(parsed?.summary);
-    const cardsRaw = Array.isArray(parsed?.cards) ? parsed.cards : [];
+    const cardsRaw: unknown[] = Array.isArray(parsed?.cards) ? parsed.cards : [];
     const parsedCards = cardsRaw
-      .map(normalizeCard)
+      .map((raw) => normalizeCard(raw))
       .filter((c): c is CardData => c !== null);
 
     if (!summary || parsedCards.length === 0) return null;
@@ -240,8 +266,8 @@ export function parseCare(raw: string): ParsedCare | null {
     // 빠진 카테고리는 fallback에서 보충
     const cards = required.map((key) => {
       return (
-        parsedCards.find((card) => card.category === key) ??
-        FALLBACK_CARE.cards.find((card) => card.category === key)!
+        parsedCards.find((card: CardData) => card.category === key) ??
+        FALLBACK_CARE.cards.find((card: CardData) => card.category === key)!
       );
     });
 
@@ -255,8 +281,7 @@ export function parseCare(raw: string): ParsedCare | null {
   }
 }
 
-// ── 캐시 ───────────────────────────────────────────────────
-export const CARE_CACHE_KEY = 'naapo:care-suggestion:v7';
+// ── 캐시 (날짜 키 + 오늘 pain_records 시그니처 — lib/todayCareCache.ts) ──
 export const CARE_PRIMARY_PERIOD_DAYS = 7;
 export const CARE_FALLBACK_PERIOD_DAYS = 30;
 
@@ -279,41 +304,12 @@ export function makeSignature(s: CareSummary, profile?: CareProfile | null): str
   ].join('|');
 }
 
-type CachePayload = {
-  signature: string;
-  care: ParsedCare;
-  savedAt: number;
+export type FetchCareOptions = {
+  forceRefresh?: boolean;
 };
 
-export async function loadCareCache(): Promise<CachePayload | null> {
-  try {
-    const raw = await AsyncStorage.getItem(CARE_CACHE_KEY);
-    if (!raw) return null;
-
-    const payload = JSON.parse(raw) as CachePayload;
-
-    if (
-      !payload?.signature ||
-      !payload?.care ||
-      typeof payload.care.summary !== 'string' ||
-      !Array.isArray(payload.care.cards) ||
-      payload.care.cards.length === 0
-    ) {
-      console.log('[CARE] invalid cache — ignoring');
-      return null;
-    }
-
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
-export async function saveCareCache(payload: CachePayload): Promise<void> {
-  try {
-    await AsyncStorage.setItem(CARE_CACHE_KEY, JSON.stringify(payload));
-  } catch {}
-}
+/** 동시 호출(StrictMode·복수 컴포넌트) 시 한 번만 네트워크·Claude 호출 */
+let fetchCareDataNormalInFlight: Promise<{ summary: CareSummary; care: ParsedCare }> | null = null;
 
 // ── 신호 칩 ────────────────────────────────────────────────
 export function buildSignals(s: CareSummary | null): string[] {
@@ -515,18 +511,21 @@ markdown, 코드블록, 설명문 금지.
 `.trim();
 }
 
-// ── 통합 fetch ─────────────────────────────────────────────
-export async function fetchCareData(
+async function loadCareDataCore(
   profile?: CareProfile | null,
+  options?: FetchCareOptions,
 ): Promise<{ summary: CareSummary; care: ParsedCare }> {
-  // 1. 최근 7일 기록 우선 조회
-  let summary = await fetchRecentCareSummary(7);
+  const forceRefresh = options?.forceRefresh ?? false;
 
-  // 2. 최근 7일 기록이 없으면 최근 30일 기록 사용
+  const todayPainRecords = await fetchTodayPainRecords();
+  const painSignature = createPainRecordSignature(todayPainRecords);
+
+  let summary = await fetchRecentCareSummary(CARE_PRIMARY_PERIOD_DAYS);
+
   if (summary.recordCount === 0) {
     console.log('[CARE] no recent 7-day records — trying 30-day fallback');
 
-    const fallbackSummary = await fetchRecentCareSummary(30);
+    const fallbackSummary = await fetchRecentCareSummary(CARE_FALLBACK_PERIOD_DAYS);
 
     if (fallbackSummary.recordCount > 0) {
       console.log('[CARE] using 30-day personalized care fallback');
@@ -535,28 +534,16 @@ export async function fetchCareData(
   }
 
   console.log('[CARE] recordCount:', summary.recordCount);
-  console.log('[CARE] topBodyPart:', summary.topBodyPart, 'x', summary.topBodyPartCount);
-  console.log('[CARE] avgIntensity:', summary.avgIntensity, 'highDays:', summary.highIntensityDays);
-  console.log('[CARE] avgSleep:', summary.avgSleepHours, 'shortDays:', summary.shortSleepDays);
-  console.log(
-    '[CARE] emotion good/normal/bad:',
-    summary.emotionGood,
-    summary.emotionNormal,
-    summary.emotionBad,
-  );
-  console.log('[CARE] painTypes:', summary.painTypes);
+  console.log('[CARE] today pain signature:', painSignature);
 
-  const signature = makeSignature(summary, profile);
-  console.log('[CARE] signature:', signature);
-
-  const cached = await loadCareCache();
-
-  if (cached && cached.signature === signature) {
-    console.log('[CARE] cache HIT — returning cached care');
-    return { summary, care: cached.care };
+  if (!forceRefresh) {
+    const cachedCare = await getCachedTodayCare<ParsedCare>(painSignature);
+    if (cachedCare) {
+      console.log('[CARE] today-care cache HIT — skipping Claude');
+      return { summary, care: cachedCare };
+    }
   }
 
-  // 3. 진짜 기록이 하나도 없을 때만 기본 fallback care 사용
   if (summary.recordCount === 0) {
     console.log('[CARE] absolutely no records — using FALLBACK_CARE');
 
@@ -566,7 +553,7 @@ export async function fetchCareData(
     };
   }
 
-  console.log('[CARE] cache MISS — calling Claude');
+  console.log('[CARE] today-care cache MISS — calling Claude');
 
   try {
     const prompt = buildCarePrompt(summary, profile);
@@ -581,37 +568,52 @@ export async function fetchCareData(
     if (care) {
       console.log('[CARE] Claude parse OK — caching and returning');
 
-      await saveCareCache({
-        signature,
-        care,
-        savedAt: Date.now(),
-      });
+      await saveCachedTodayCare(care, painSignature);
 
       return { summary, care };
     }
 
-    // 4. 기록은 있는데 Claude 응답 파싱 실패한 경우
-    // 이때는 절대 FALLBACK_CARE를 쓰면 안 됨.
     console.warn(
       '[CARE] Claude parse FAILED — using local personalized care instead. Raw reply:',
       reply?.slice(0, 200),
     );
 
     const localCare = buildLocalCareFromSummary(summary);
+    await saveCachedTodayCare(localCare, painSignature);
 
     return {
       summary,
       care: localCare,
     };
   } catch (error) {
-    // 5. Claude 호출 자체가 실패해도 기록 기반 로컬 케어 사용
     console.warn('[CARE] Claude request FAILED — using local personalized care instead:', error);
 
     const localCare = buildLocalCareFromSummary(summary);
+    await saveCachedTodayCare(localCare, painSignature);
 
     return {
       summary,
       care: localCare,
     };
   }
+}
+
+// ── 통합 fetch ─────────────────────────────────────────────
+export async function fetchCareData(
+  profile?: CareProfile | null,
+  options?: FetchCareOptions,
+): Promise<{ summary: CareSummary; care: ParsedCare }> {
+  const forceRefresh = options?.forceRefresh ?? false;
+
+  if (forceRefresh) {
+    return loadCareDataCore(profile, options);
+  }
+
+  if (!fetchCareDataNormalInFlight) {
+    fetchCareDataNormalInFlight = loadCareDataCore(profile, options).finally(() => {
+      fetchCareDataNormalInFlight = null;
+    });
+  }
+
+  return fetchCareDataNormalInFlight;
 }

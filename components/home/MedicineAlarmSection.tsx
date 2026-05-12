@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AlarmClock, Pill } from 'lucide-react-native';
 import {
   ActivityIndicator,
   Alert,
@@ -41,11 +42,12 @@ Notifications.setNotificationHandler({
 });
 
 const T = {
-  text:      '#FFFFFF',
+  text: '#FFFFFF',
   textMuted: '#C8DFEF',
-  primary:   '#4A90D9',
+  textSoft: '#9FC6DF',
+  primary: '#4A90D9',
   secondary: '#7EC8E3',
-  accent:    '#2E5FA3',
+  accent: '#2E5FA3',
 };
 
 function TimerEditor({
@@ -75,6 +77,11 @@ function TimerEditor({
   );
 }
 
+function getTimerSummary(alarm: MedicineAlarm) {
+  if (!alarm.timers.length) return '시간 미설정';
+  return alarm.timers.map((timer) => formatTime(timer.hour, timer.minute)).join(' · ');
+}
+
 export function MedicineAlarmSection() {
   const insets = useSafeAreaInsets();
   const [alarms, setAlarms] = useState<MedicineAlarm[]>([]);
@@ -89,6 +96,7 @@ export function MedicineAlarmSection() {
 
   useEffect(() => {
     let mounted = true;
+
     (async () => {
       try {
         const loaded = await loadMedicineAlarms();
@@ -105,10 +113,12 @@ export function MedicineAlarmSection() {
   }, []);
 
   const activeCount = useMemo(() => alarms.filter((alarm) => alarm.isActive).length, [alarms]);
+
   const pickerTarget = useMemo(
     () => timers.find((timer) => timer.id === pickerTimerId) ?? null,
     [pickerTimerId, timers],
   );
+
   const pickerValue = useMemo(() => {
     const source = pickerTarget ?? timers[0];
     const date = new Date();
@@ -132,7 +142,7 @@ export function MedicineAlarmSection() {
     new Promise<boolean>((resolve) => {
       Alert.alert(
         '알림 권한 안내',
-        '약 알람 기능을 사용하려면 알림 권한이 필요해요.\n다음 단계에서 권한 요청 팝업이 표시됩니다.',
+        '약 알림 기능을 사용하려면 알림 권한이 필요해요.\n다음 단계에서 권한 요청 팝업이 표시됩니다.',
         [
           { text: '취소', style: 'cancel', onPress: () => resolve(false) },
           { text: '확인', onPress: () => resolve(true) },
@@ -148,18 +158,22 @@ export function MedicineAlarmSection() {
       Alert.alert('입력 필요', '약 이름을 입력해주세요.');
       return;
     }
+
     if (!trimmedRule) {
       Alert.alert('입력 필요', '복용 규칙을 입력해주세요.');
       return;
     }
+
     if (timers.length === 0) {
-      Alert.alert('입력 필요', '최소 1개의 알람 시간을 설정해주세요.');
+      Alert.alert('입력 필요', '최소 1개의 알림 시간을 설정해주세요.');
       return;
     }
 
     setSaving(true);
+
     try {
       const seenGuide = await hasSeenAlarmPermissionGuide();
+
       if (!seenGuide) {
         const proceed = await confirmFirstPermissionGuide();
         if (!proceed) return;
@@ -171,15 +185,17 @@ export function MedicineAlarmSection() {
         dosageRule: trimmedRule,
         timers,
       });
+
       const activeAlarm = await activateMedicineAlarm(baseAlarm);
       const nextAlarms = [activeAlarm, ...alarms];
+
       await syncAlarms(nextAlarms);
       resetForm();
       setShowModal(false);
-      Alert.alert('저장 완료', '약 알람이 설정되었어요.');
+      Alert.alert('저장 완료', '약 알림이 설정되었어요.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : '알람 설정에 실패했어요.';
-      Alert.alert('알람 설정 실패', message);
+      const message = error instanceof Error ? error.message : '알림 설정에 실패했어요.';
+      Alert.alert('알림 설정 실패', message);
     } finally {
       setSaving(false);
     }
@@ -191,7 +207,7 @@ export function MedicineAlarmSection() {
       const nextAlarms = alarms.map((alarm) => (alarm.id === target.id ? stopped : alarm));
       await syncAlarms(nextAlarms);
     } catch {
-      Alert.alert('중단 실패', '알람 중단 중 문제가 발생했어요.');
+      Alert.alert('중단 실패', '알림 중단 중 문제가 발생했어요.');
     }
   };
 
@@ -201,13 +217,13 @@ export function MedicineAlarmSection() {
       const nextAlarms = alarms.map((alarm) => (alarm.id === target.id ? restarted : alarm));
       await syncAlarms(nextAlarms);
     } catch (error) {
-      const message = error instanceof Error ? error.message : '알람 재시작에 실패했어요.';
+      const message = error instanceof Error ? error.message : '알림 재시작에 실패했어요.';
       Alert.alert('재시작 실패', message);
     }
   };
 
   const handleDeleteAlarm = (target: MedicineAlarm) => {
-    Alert.alert('알람 삭제', '이 약 알람을 삭제할까요?', [
+    Alert.alert('알림 삭제', '이 약 알림을 삭제할까요?', [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제',
@@ -218,7 +234,7 @@ export function MedicineAlarmSection() {
             const nextAlarms = alarms.filter((alarm) => alarm.id !== stopped.id);
             await syncAlarms(nextAlarms);
           } catch {
-            Alert.alert('삭제 실패', '알람 삭제 중 문제가 발생했어요.');
+            Alert.alert('삭제 실패', '알림 삭제 중 문제가 발생했어요.');
           }
         },
       },
@@ -228,6 +244,7 @@ export function MedicineAlarmSection() {
   const updateTimerTime = (timerId: string, selectedDate: Date) => {
     const hour = selectedDate.getHours();
     const minute = selectedDate.getMinutes();
+
     setTimers((prev) =>
       prev.map((timer) => (timer.id === timerId ? { ...timer, hour, minute } : timer)),
     );
@@ -235,10 +252,13 @@ export function MedicineAlarmSection() {
 
   const handleTimerPickerChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     const targetId = pickerTimerId;
+
     if (Platform.OS === 'android') {
       setPickerTimerId(null);
     }
+
     if (event.type !== 'set' || !selectedDate || !targetId) return;
+
     updateTimerTime(targetId, selectedDate);
   };
 
@@ -246,7 +266,18 @@ export function MedicineAlarmSection() {
     <>
       <GlassCard style={styles.card}>
         <View style={styles.cardTopRow}>
-          <Text style={styles.cardTitle}>💊 약 알람 관리</Text>
+          <View style={styles.titleRow}>
+            <View style={styles.titleIconWrap}>
+              <AlarmClock size={14} color="#8ED0FF" strokeWidth={2.4} />
+            </View>
+
+            <View style={styles.statusRow}>
+              <Text style={styles.statusText}>등록 {alarms.length}개</Text>
+              <Text style={styles.statusDivider}>·</Text>
+              <Text style={styles.statusText}>활성 {activeCount}개</Text>
+            </View>
+          </View>
+
           <Pressable onPress={() => setShowModal(true)} accessibilityRole="button">
             <LinearGradient
               colors={['#5A9FE9', '#2E6BBF']}
@@ -254,15 +285,9 @@ export function MedicineAlarmSection() {
               end={{ x: 1, y: 1 }}
               style={styles.addBtn}
             >
-              <Text style={styles.addBtnText}>+ 알람 추가</Text>
+              <Text style={styles.addBtnText}>+ 추가</Text>
             </LinearGradient>
           </Pressable>
-        </View>
-
-        <View style={styles.statusRow}>
-          <Text style={styles.statusText}>등록 {alarms.length}개</Text>
-          <Text style={styles.statusDivider}>·</Text>
-          <Text style={styles.statusText}>동작 중 {activeCount}개</Text>
         </View>
 
         {loading ? (
@@ -271,8 +296,8 @@ export function MedicineAlarmSection() {
           </View>
         ) : alarms.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>아직 설정된 약 알람이 없어요.</Text>
-            <Text style={styles.emptySubText}>+ 알람 추가 버튼으로 첫 알람을 만들어보세요.</Text>
+            <Text style={styles.emptyText}>아직 설정된 약 알림이 없어요.</Text>
+            <Text style={styles.emptySubText}>복용 시간을 등록해두면 잊지 않게 도와드릴게요.</Text>
           </View>
         ) : (
           <View style={styles.alarmList}>
@@ -280,41 +305,71 @@ export function MedicineAlarmSection() {
               <View key={alarm.id} style={styles.alarmItem}>
                 <View style={styles.alarmItemTop}>
                   <View style={styles.alarmInfo}>
-                    <Text style={styles.alarmName}>{alarm.medicineName}</Text>
-                    <Text style={styles.alarmRule}>{alarm.dosageRule}</Text>
-                  </View>
-                  <View style={[styles.stateBadge, alarm.isActive ? styles.stateBadgeOn : styles.stateBadgeOff]}>
-                    <Text style={[styles.stateBadgeText, alarm.isActive ? styles.stateBadgeTextOn : styles.stateBadgeTextOff]}>
-                      {alarm.isActive ? '알람 동작 중' : '알람 중단됨'}
-                    </Text>
-                  </View>
-                </View>
+                    <View style={styles.alarmNameRow}>
+                      <Text style={styles.alarmName} numberOfLines={1}>
+                        {alarm.medicineName}
+                      </Text>
 
-                <View style={styles.timerChipRow}>
-                  {alarm.timers.map((timer) => (
-                    <View key={timer.id} style={styles.timerChip}>
-                      <Text style={styles.timerChipText}>{formatTime(timer.hour, timer.minute)}</Text>
+                      <View
+                        style={[
+                          styles.stateBadge,
+                          alarm.isActive ? styles.stateBadgeOn : styles.stateBadgeOff,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.stateBadgeText,
+                            alarm.isActive
+                              ? styles.stateBadgeTextOn
+                              : styles.stateBadgeTextOff,
+                          ]}
+                        >
+                          {alarm.isActive ? '활성화됨' : '중단됨'}
+                        </Text>
+                      </View>
                     </View>
-                  ))}
+
+                    <Text style={styles.alarmRule} numberOfLines={1}>
+                      {alarm.dosageRule}
+                    </Text>
+
+                    <View style={styles.nextAlarmRow}>
+                      <Text style={styles.nextAlarmLabel}>
+                        {alarm.isActive ? '다음 알림' : '예정 시간'}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.nextAlarmTime,
+                          !alarm.isActive && styles.nextAlarmTimeInactive,
+                        ]}
+                      >
+                        {getTimerSummary(alarm)}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
 
                 <View style={styles.alarmActionRow}>
                   {alarm.isActive ? (
                     <Pressable onPress={() => handleStopAlarm(alarm)} style={styles.stopBtn}>
-                      <Text style={styles.stopBtnText}>복용 종료 · 알람 중단</Text>
+                      <Text style={styles.stopBtnText}>알림 중단</Text>
                     </Pressable>
                   ) : (
-                    <Pressable onPress={() => handleRestartAlarm(alarm)}>
+                    <Pressable
+                      onPress={() => handleRestartAlarm(alarm)}
+                      style={styles.actionPressable}
+                    >
                       <LinearGradient
                         colors={['#5A9FE9', '#2E6BBF']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.restartBtn}
                       >
-                        <Text style={styles.restartBtnText}>알람 다시 시작</Text>
+                        <Text style={styles.restartBtnText}>다시 시작</Text>
                       </LinearGradient>
                     </Pressable>
                   )}
+
                   <Pressable onPress={() => handleDeleteAlarm(alarm)} style={styles.deleteBtn}>
                     <Text style={styles.deleteBtnText}>삭제</Text>
                   </Pressable>
@@ -346,13 +401,17 @@ export function MedicineAlarmSection() {
               experimentalBlurMethod="dimezisBlurView"
               style={styles.modalCard}
             >
-              {/* dark ocean overlay */}
-              <View style={[StyleSheet.absoluteFill, styles.modalOverlay, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }]} />
-              {/* top shine */}
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  styles.modalOverlay,
+                  { borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+                ]}
+              />
               <View style={styles.modalShine} />
 
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>약 알람 추가</Text>
+                <Text style={styles.modalTitle}>약 알림 추가</Text>
                 <Pressable
                   onPress={() => {
                     setPickerTimerId(null);
@@ -394,7 +453,7 @@ export function MedicineAlarmSection() {
                 />
 
                 <View style={styles.timerHeader}>
-                  <Text style={styles.fieldLabel}>알람 타이머</Text>
+                  <Text style={styles.fieldLabel}>알림 타이머</Text>
                   <Pressable
                     onPress={() => setTimers((prev) => [...prev, createTimer(8, 0)])}
                     style={styles.timerAddBtn}
@@ -451,7 +510,7 @@ export function MedicineAlarmSection() {
                     {saving ? (
                       <ActivityIndicator size="small" color={T.text} />
                     ) : (
-                      <Text style={styles.saveBtnText}>알람 저장</Text>
+                      <Text style={styles.saveBtnText}>알림 저장</Text>
                     )}
                   </LinearGradient>
                 </Pressable>
@@ -465,60 +524,75 @@ export function MedicineAlarmSection() {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    // GlassCard handles the visual; no extra overrides needed
-  },
+  card: {},
+
   cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: T.text,
+  titleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  titleIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    backgroundColor: 'rgba(126,200,227,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(126,200,227,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addBtn: {
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingHorizontal: 13,
     paddingVertical: 8,
   },
   addBtnText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFFFFF',
   },
+
   statusRow: {
-    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   statusText: {
     fontSize: 12,
     color: T.textMuted,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   statusDivider: {
     marginHorizontal: 6,
     color: T.textMuted,
   },
+
   loadingWrap: {
     marginTop: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   emptyBox: {
-    marginTop: 14,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(126,180,220,0.18)',
+    marginTop: 13,
+    padding: 13,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(168,216,234,0.45)',
+    borderColor: 'rgba(168,216,234,0.24)',
   },
   emptyText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: T.secondary,
   },
   emptySubText: {
@@ -527,37 +601,43 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: T.textMuted,
   },
+
   alarmList: {
     marginTop: 12,
-    gap: 10,
+    gap: 9,
   },
   alarmItem: {
     borderWidth: 1,
-    borderColor: 'rgba(168,216,234,0.32)',
-    borderRadius: 14,
+    borderColor: 'rgba(168,216,234,0.26)',
+    borderRadius: 16,
     padding: 12,
-    backgroundColor: 'rgba(126,180,220,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.055)',
   },
   alarmItemTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 8,
   },
   alarmInfo: {
     flex: 1,
   },
+  alarmNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   alarmName: {
-    fontSize: 14,
-    fontWeight: '700',
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
     color: T.text,
   },
   alarmRule: {
-    marginTop: 2,
+    marginTop: 4,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: T.textMuted,
   },
+
   stateBadge: {
     borderRadius: 999,
     paddingHorizontal: 8,
@@ -565,89 +645,99 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   stateBadgeOn: {
-    backgroundColor: 'rgba(100,210,160,0.15)',
-    borderColor: 'rgba(100,210,160,0.40)',
+    backgroundColor: 'rgba(98,220,170,0.15)',
+    borderColor: 'rgba(98,220,170,0.38)',
   },
   stateBadgeOff: {
-    backgroundColor: 'rgba(126,180,220,0.10)',
-    borderColor: 'rgba(168,216,234,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.055)',
+    borderColor: 'rgba(168,216,234,0.22)',
   },
   stateBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   stateBadgeTextOn: {
-    color: '#7EDCB0',
+    color: '#80E0B2',
   },
   stateBadgeTextOff: {
     color: T.textMuted,
   },
-  timerChipRow: {
+
+  nextAlarmRow: {
     marginTop: 10,
+    alignSelf: 'flex-start',
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  timerChip: {
+    alignItems: 'center',
+    gap: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(74,144,217,0.20)',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(74,144,217,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(126,200,227,0.40)',
+    borderColor: 'rgba(126,200,227,0.28)',
   },
-  timerChipText: {
-    fontSize: 12,
-    color: T.secondary,
+  nextAlarmLabel: {
+    fontSize: 11,
     fontWeight: '700',
+    color: T.textSoft,
   },
+  nextAlarmTime: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: T.secondary,
+  },
+  nextAlarmTimeInactive: {
+    color: T.textMuted,
+  },
+
   alarmActionRow: {
-    marginTop: 10,
+    marginTop: 11,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  actionPressable: {
+    flex: 1,
   },
   stopBtn: {
     flex: 1,
-    borderRadius: 10,
-    backgroundColor: 'rgba(220,80,80,0.15)',
+    borderRadius: 11,
+    backgroundColor: 'rgba(255,255,255,0.055)',
     borderWidth: 1,
-    borderColor: 'rgba(220,120,120,0.35)',
+    borderColor: 'rgba(168,216,234,0.22)',
     paddingVertical: 9,
     alignItems: 'center',
   },
   stopBtnText: {
     fontSize: 12,
-    color: '#F0AAAA',
-    fontWeight: '700',
+    color: T.textMuted,
+    fontWeight: '800',
   },
   restartBtn: {
-    flex: 1,
-    borderRadius: 10,
+    borderRadius: 11,
     paddingVertical: 9,
     alignItems: 'center',
-    paddingHorizontal: 12,
+    justifyContent: 'center',
   },
   restartBtnText: {
     fontSize: 12,
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '800',
   },
   deleteBtn: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(168,216,234,0.28)',
-    paddingHorizontal: 12,
+    borderRadius: 11,
+    paddingHorizontal: 11,
     paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(126,180,220,0.08)',
+    backgroundColor: 'transparent',
   },
   deleteBtnText: {
     fontSize: 12,
     color: T.textMuted,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  // ── Modal ──────────────────────────────────────────────
+
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(3,12,18,0.75)',
@@ -688,12 +778,12 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '800',
     color: T.text,
   },
   modalClose: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: T.secondary,
   },
   modalScroll: {
@@ -709,11 +799,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 12,
   },
+
   fieldLabel: {
     marginTop: 14,
     marginBottom: 6,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     color: T.textMuted,
   },
   fieldInput: {
@@ -726,6 +817,7 @@ const styles = StyleSheet.create({
     color: T.text,
     backgroundColor: 'rgba(126,180,220,0.20)',
   },
+
   timerHeader: {
     marginTop: 8,
     flexDirection: 'row',
@@ -742,7 +834,7 @@ const styles = StyleSheet.create({
   },
   timerAddBtnText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: T.secondary,
   },
   timerGuide: {
@@ -784,7 +876,7 @@ const styles = StyleSheet.create({
   timePickText: {
     color: T.secondary,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   timerHint: {
     marginLeft: 4,
@@ -803,9 +895,10 @@ const styles = StyleSheet.create({
   },
   timerRemoveText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#F0AAAA',
   },
+
   pickerWrap: {
     marginTop: 10,
     borderWidth: 1,
@@ -826,9 +919,10 @@ const styles = StyleSheet.create({
   },
   pickerDoneText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: T.secondary,
   },
+
   saveBtn: {
     borderRadius: 14,
     paddingVertical: 14,
@@ -837,7 +931,7 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFFFFF',
   },
 });
