@@ -128,6 +128,69 @@ async function saveCache(payload: CachePayload): Promise<void> {
   try { await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(payload)); } catch {}
 }
 
+// ── 데이터 분석 → 오늘의 '핵심' 카테고리 결정 ──────────────
+/**
+ * 최근 7일 데이터를 점수화해 4개 섹터(스트레칭/수분·영양/수면/마음) 중
+ * 어디에 '오늘의 핵심' 배지가 붙을지 결정한다.
+ * 데이터가 달라지면 자연스럽게 핵심 섹터가 옮겨간다.
+ *
+ * 반환값이 null이면 AI가 보내준 primary를 그대로 사용.
+ */
+function pickPrimaryCategory(s: CareSummary | null): CategoryKey | null {
+  if (!s || s.recordCount === 0) return null;
+
+  const scores: Record<CategoryKey, number> = {
+    stretch: 0,
+    nutrition: 0,
+    sleep: 0,
+    mind: 0,
+  };
+
+  // ── 스트레칭 / 자세: 통증 부위 집중 + 강도 ──
+  if (s.topBodyPart) {
+    scores.stretch += s.topBodyPartCount * 2;
+    // 자세 관련 부위는 가중치
+    if (/목|어깨|허리|등|척추|골반/.test(s.topBodyPart)) {
+      scores.stretch += 3;
+    }
+  }
+  scores.stretch += s.avgIntensity;            // 평균 강도 그대로
+  scores.stretch += s.highIntensityDays * 3;   // 강도 7+ 일수당 +3
+
+  // ── 수면: 수면 시간 부족 ──
+  if (s.avgSleepHours != null) {
+    if (s.avgSleepHours < 5)        scores.sleep += 10;
+    else if (s.avgSleepHours < 6)   scores.sleep += 6;
+    else if (s.avgSleepHours < 6.5) scores.sleep += 3;
+  }
+  scores.sleep += s.shortSleepDays * 4;        // 5시간 미만 일수당 +4
+
+  // ── 마음: 부정 감정 빈도 ──
+  scores.mind += s.emotionBad * 3;
+  scores.mind -= s.emotionGood;                // 좋음이 많으면 마음은 덜 시급
+  // 통증이 잦고 감정도 동시에 무너지면 마음 우선도 ↑
+  if (s.emotionBad >= 2 && (s.highIntensityDays >= 1 || s.topBodyPartCount >= 2)) {
+    scores.mind += 4;
+  }
+
+  // ── 수분·영양: 두통·열감·수분 관련 단서 ──
+  if (s.topBodyPart && /머리|두통|편두통|관자/.test(s.topBodyPart)) {
+    scores.nutrition += 6;
+  }
+  if (s.painTypes.some((t) => /두통|어지|건조|입마름|화끈/.test(t))) {
+    scores.nutrition += 3;
+  }
+  // 기본 가중치: 다른 영역 신호가 적을 때 자연스럽게 올라오도록
+  scores.nutrition += 1;
+
+  // ── 최고 점수 선택 (점수가 너무 낮으면 AI 결정에 위임) ──
+  const ranked = (Object.entries(scores) as [CategoryKey, number][])
+    .sort((a, b) => b[1] - a[1]);
+  const [topCategory, topScore] = ranked[0];
+  if (topScore < 3) return null;
+  return topCategory;
+}
+
 // ── 신호 칩 (패턴 중심 표현) ───────────────────────────────
 function buildSignals(s: CareSummary | null): string[] {
   if (!s || s.recordCount === 0) return [];
@@ -198,6 +261,21 @@ export function CareSuggestionSection() {
   const signals     = useMemo(() => buildSignals(summary), [summary]);
   const displayCare = care ?? FALLBACK_CARE;
 
+  // 데이터 분석으로 정한 '핵심' 카테고리를 hero 슬롯으로 승격.
+  // 일치하는 카드가 없거나 데이터가 약하면 AI의 primary를 그대로 사용.
+  const { heroCard, otherCards } = useMemo(() => {
+    const allCards = [displayCare.primary, ...displayCare.secondary];
+    const dataDrivenCategory = pickPrimaryCategory(summary);
+
+    let hero = displayCare.primary;
+    if (dataDrivenCategory) {
+      const matched = allCards.find((c) => c.category === dataDrivenCategory);
+      if (matched) hero = matched;
+    }
+    const rest = allCards.filter((c) => c !== hero).slice(0, 3);
+    return { heroCard: hero, otherCards: rest };
+  }, [displayCare, summary]);
+
   return (
     <GlassCard style={styles.card}>
 
@@ -249,12 +327,12 @@ export function CareSuggestionSection() {
         </View>
       ) : (
         <>
-          {/* 핵심 케어 카드 */}
-          <HeroCard data={displayCare.primary} />
+          {/* 데이터 분석으로 선정된 핵심 케어 카드 */}
+          <HeroCard data={heroCard} />
 
           {/* 보조 케어 카드 */}
           <View style={styles.secondaryList}>
-            {displayCare.secondary.slice(0, 3).map((card) => (
+            {otherCards.map((card) => (
               <SecondaryCard key={card.category} data={card} />
             ))}
           </View>

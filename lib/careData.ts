@@ -160,7 +160,8 @@ function buildLocalCareFromSummary(summary: CareSummary): ParsedCare {
           recommendation: '잠들기 전 화면 밝기를 줄이고 몸을 쉬는 모드로 바꿔보세요.',
           routine: ['자기 전 화면 줄이기', '가벼운 호흡 3분'],
           avoid: ['늦은 카페인', '침대에서 오래 스마트폰 보기'],
-          apoMessage: '오늘은 잠을 회복 루틴의 핵심으로 잡아볼게요.',
+          apoMessage:
+            '수면도 회복을 돕는 한 가지예요. 무리 없이 리듬만 가볍게 맞춰가도 좋아요.',
         },
       },
       {
@@ -408,6 +409,7 @@ function buildCarePrompt(summary: CareSummary, profile?: CareProfile | null): st
 사용자의 최근 통증 기록과 기본 정보를 바탕으로 "오늘의 맞춤 케어"를 생성해줘.
 
 중요한 원칙:
+- 앱에서는 기록 패턴 분석 결과 한 장의 카드에만 "오늘의 핵심" 배지가 붙습니다. 다른 카테고리(sleep, hydration 등)의 detail.apoMessage에는 "오늘의 핵심", "회복 루틴의 핵심", "가장 중요한 케어", "~의 핵심으로" 같은 표현을 쓰지 말 것. 보조 루틴으로 짧고 따뜻하게.
 - 진단, 치료, 처방처럼 말하지 말 것.
 - 의학적 확정 표현 금지.
 - "도움이 될 수 있어요", "추천드릴게요" 정도의 부드러운 표현 사용.
