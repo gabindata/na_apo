@@ -396,15 +396,18 @@ export function MedicineAlarmSection() {
             style={styles.modalKeyboardAvoid}
           >
             <BlurView
-              intensity={40}
+              // iOS: dark 톤 가우시안 블러로 자연스러운 시트 느낌.
+              // Android: dimezisBlurView 가 폰마다 결과가 들쭉날쭉이라 intensity 0 으로 사실상 비활성화하고
+              // 아래의 modalOverlay 색을 더 진하게 깔아 같은 무게감을 만든다.
+              intensity={Platform.OS === 'ios' ? 40 : 0}
               tint="dark"
-              experimentalBlurMethod="dimezisBlurView"
               style={styles.modalCard}
             >
               <View
                 style={[
                   StyleSheet.absoluteFill,
                   styles.modalOverlay,
+                  Platform.OS === 'android' && styles.modalOverlayAndroid,
                   { borderTopLeftRadius: 24, borderTopRightRadius: 24 },
                 ]}
               />
@@ -757,6 +760,10 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     backgroundColor: 'rgba(8,26,48,0.82)',
+  },
+  modalOverlayAndroid: {
+    // Android는 BlurView가 사실상 비활성이라 더 진하게 깔아 같은 무게감 확보.
+    backgroundColor: 'rgba(6,18,34,0.95)',
   },
   modalShine: {
     position: 'absolute',

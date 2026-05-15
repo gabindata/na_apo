@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { BgmProvider } from '../contexts/BgmContext';
 import { Colors } from '../constants/colors';
 import { FONT_ASSETS, applyGlobalFont } from '../lib/fonts';
+import { DebugBuildBadge } from '../components/debug/DebugBuildBadge';
 
 // 모듈 로드 시점에 한 번만 패치 → 이후 모든 Text/TextInput 렌더에 자동 반영
 applyGlobalFont();
@@ -64,6 +65,9 @@ function RootLayoutNav() {
           <ActivityIndicator size="large" color={Colors.primary} style={styles.splashSpinner} />
         </View>
       )}
+
+      {/* 디버그용 — OTA 번들 적용 여부 확인용 배지. 출시 시 주석 처리. */}
+      <DebugBuildBadge />
     </>
   );
 }

@@ -14,9 +14,11 @@
       "backgroundColor": "#F0F8FF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.naapo.app"
     },
     "android": {
+      "package": "com.naapo.app",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo/adaptive-icon.png",
@@ -32,6 +34,19 @@
       "expo-router",
       "expo-font",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a07a9abe-1150-4c89-8f8a-110354d55639"
+      }
+    },
+    "owner": "iron_lung",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a07a9abe-1150-4c89-8f8a-110354d55639"
+    }
   }
 }

@@ -356,10 +356,15 @@ export default function RapoScreen() {
         </Pressable>
       </View>
 
+      {/*
+        edge-to-edge Android에서 behavior={undefined} + adjustResize 만으로는
+        키보드가 입력창을 가리는 문제 발생 → 두 플랫폼 모두 padding 으로 통일.
+        Android는 status bar 높이만큼 offset 보정.
+      */}
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : insets.top}
       >
         {/* 채팅 목록 */}
         <FlatList
