@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import type { DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -139,37 +139,44 @@ export default function HomeScreen() {
   const [detailDateKey, setDetailDateKey] = useState<string | null>(null);
   const [greetingSeed] = useState(() => Math.floor(Math.random() * 100));
 
-  useEffect(() => {
-    let mounted = true;
-    if (!user) { setProfile(null); return; }
-    (async () => {
-      const data = await fetchUserProfile(user.id);
-      if (mounted) setProfile(data);
-    })();
-    return () => { mounted = false; };
-  }, [user]);
+  // 홈 탭에 포커스가 들어올 때마다 + visibleMonth 가 바뀔 때마다 다시 받아온다.
+  // 라포 탭에서 새 기록을 저장한 뒤 홈 탭으로 돌아오면 통계·캘린더가 즉시 갱신됨.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      (async () => {
+        setStatsLoading(true);
+        try {
+          const [records, monthStats] = await Promise.all([
+            fetchMonthlyRecords(visibleMonth.year, visibleMonth.month),
+            fetchMonthlyStats(visibleMonth.year, visibleMonth.month),
+          ]);
+          if (!active) return;
+          setMonthlyRecords(records);
+          setStats(monthStats);
+        } catch (err) {
+          console.error('[Home] 월별 통증 기록 조회 실패:', err);
+          if (active) { setMonthlyRecords([]); setStats(null); }
+        } finally {
+          if (active) setStatsLoading(false);
+        }
+      })();
+      return () => { active = false; };
+    }, [visibleMonth.month, visibleMonth.year]),
+  );
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      setStatsLoading(true);
-      try {
-        const [records, monthStats] = await Promise.all([
-          fetchMonthlyRecords(visibleMonth.year, visibleMonth.month),
-          fetchMonthlyStats(visibleMonth.year, visibleMonth.month),
-        ]);
-        if (!mounted) return;
-        setMonthlyRecords(records);
-        setStats(monthStats);
-      } catch (err) {
-        console.error('[Home] 월별 통증 기록 조회 실패:', err);
-        if (mounted) { setMonthlyRecords([]); setStats(null); }
-      } finally {
-        if (mounted) setStatsLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [visibleMonth.month, visibleMonth.year]);
+  // 프로필(코인·캐릭터 등)도 다른 탭에서 변동될 수 있으니 포커스 시 새로고침.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (!user) { setProfile(null); return; }
+      (async () => {
+        const data = await fetchUserProfile(user.id);
+        if (active) setProfile(data);
+      })();
+      return () => { active = false; };
+    }, [user]),
+  );
 
   const markedDates = useMemo(() => {
     return monthlyRecords.reduce<Record<string, { customStyles: { container: object; text: object } }>>((acc, item) => {

@@ -18,7 +18,7 @@ import * as Updates from 'expo-updates';
  * 폰에서 보이는 마커가 이 값과 같다 → OTA 적용 성공.
  * 다르다 → 아직 OTA가 안 내려옴 (embedded 번들 그대로).
  */
-export const BUILD_MARKER = 'v1 · 2026-05-15 · BlurView+Keyboard';
+export const BUILD_MARKER = 'v3 · keyboard fix + focus refresh';
 
 /**
  * 화면 상단 중앙에 떠 있는 작은 디버그 배지.
